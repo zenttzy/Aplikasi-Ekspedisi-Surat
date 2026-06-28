@@ -85,20 +85,21 @@ class SyncManager {
   }
 
   Future<void> _uploadOne(Expedition exp) async {
-    // Sesuai API contract: multipart/form-data ke /expeditions/{uuid}/upload-bukti.
-    // File foto akan ditambahkan oleh layer kamera saat fitur itu diimplementasi.
+    // Sesuai API contract: multipart/form-data ke Edge Function /functions/v1/sync-proof.
+    // surat_id dikirim sebagai field form data.
     final formData = FormData.fromMap({
+      'surat_id': exp.uuid,
       if (exp.fotoPath != null)
-        'file_overlay': await MultipartFile.fromFile(exp.fotoPath!),
+        'file': await MultipartFile.fromFile(exp.fotoPath!),
       'penerima': exp.penerima,
       'tanggal_diterima': exp.tanggalDiterima,
       'lat': exp.lat,
-      'long': exp.long,
-      'foto_hash': exp.fotoHash,
+      'lon': exp.long,
+      'hash': exp.fotoHash,
     });
 
     await _dio.post(
-      AppConstants.epUploadBukti(exp.uuid),
+      AppConstants.epUploadBukti,
       data: formData,
     );
   }

@@ -10,10 +10,10 @@ class AppConstants {
   static const String tableExpeditions = 'expeditions';
 
   // ---- Endpoint Edge Functions ----
-  static const String epSyncDownload = '/sync/download';
+  static const String epSyncDownload = '/functions/v1/sync-download';
 
-  /// Upload bukti per surat: `/expeditions/{uuid}/upload-bukti`.
-  static String epUploadBukti(String uuid) => '/expeditions/$uuid/upload-bukti';
+  /// Upload bukti per surat via Edge Function (surat_id dikirim lewat form data).
+  static const String epUploadBukti = '/functions/v1/sync-proof';
 
   // ---- Endpoint Supabase Auth ----
   static const String epAuthToken = '/token';

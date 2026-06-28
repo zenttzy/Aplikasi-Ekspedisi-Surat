@@ -160,8 +160,8 @@ class Expedition extends Equatable {
       divisiTujuan: (json['divisi_tujuan_nama'] as String?) ??
           (json['divisi_tujuan'] as String?) ??
           '',
-      penerima: json['penerima'] as String?,
-      tanggalDiterima: json['tanggal_diterima'] as String?,
+      penerima: json['nama_penerima'] as String?,
+      tanggalDiterima: json['tanggal_penerimaan'] as String?,
       status: (json['status'] as String?) ?? ExpeditionStatus.dikirim,
       // Data dari server dianggap sudah tersinkron.
       isSynced: true,
