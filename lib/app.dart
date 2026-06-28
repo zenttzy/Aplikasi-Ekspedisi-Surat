@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'features/home/home_page.dart';
+import 'features/splash/splash_page.dart';
 
 /// Root widget aplikasi: tema & routing awal.
 class EkspedisiSuratApp extends StatelessWidget {
@@ -21,7 +21,7 @@ class EkspedisiSuratApp extends StatelessWidget {
         useMaterial3: true,
         appBarTheme: const AppBarTheme(centerTitle: true),
       ),
-      home: HomePage(isConfigured: isConfigured),
+      home: SplashPage(isConfigured: isConfigured),
     );
   }
 }
