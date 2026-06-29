@@ -52,6 +52,7 @@ class DatabaseHelper {
         long             REAL,
         alamat           TEXT,
         status           TEXT NOT NULL DEFAULT '${ExpeditionStatus.dikirim}',
+        kurir_id         TEXT,
         is_synced        INTEGER NOT NULL DEFAULT 0,
         needs_upload     INTEGER NOT NULL DEFAULT 0
       )

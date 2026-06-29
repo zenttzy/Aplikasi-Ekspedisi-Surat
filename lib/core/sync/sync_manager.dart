@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../../core/config/app_constants.dart';
@@ -42,27 +43,27 @@ class SyncManager {
         _repository = repository,
         _prefs = prefs;
 
-  /// Tarik data baru dari `/sync/download` dan upsert ke SQLite.
+  /// Tarik data baru dari Supabase REST API dan upsert ke SQLite.
   Future<int> download() async {
-    final lastSyncAt = await _prefs.getLastSyncAt();
+    // Membangun URL REST API Supabase secara absolut agar mengabaikan baseUrl Edge Function
+    final String restUrl = '${_dio.options.baseUrl.replaceFirst('/functions/v1', '/rest/v1')}/surat_ekspedisi';
 
-    final res = await _dio.post(
-      AppConstants.epSyncDownload,
-      data: {'last_sync_at': lastSyncAt},
+    final res = await _dio.get(
+      restUrl,
+      queryParameters: {
+        'select': 'uuid,nomor_surat,perihal,status,tanggal_penerimaan,nama_penerima,kurir_id,divisi_pengirim:divisi_pengirim_id(nama_divisi),divisi_tujuan:divisi_tujuan_id(nama_divisi)',
+      },
     );
 
-    final body = res.data as Map<String, dynamic>;
-    final rawList = (body['data'] as List?) ?? const [];
+    final rawList = res.data as List;
     final items = rawList
         .map((e) => Expedition.fromSyncJson(e as Map<String, dynamic>))
         .toList();
 
     await _repository.upsertAll(items);
 
-    final serverTime = body['server_time'] as String?;
-    if (serverTime != null) {
-      await _prefs.setLastSyncAt(serverTime);
-    }
+    // Tandai waktu sinkronisasi terakhir
+    await _prefs.setLastSyncAt(DateTime.now().toUtc().toIso8601String());
     return items.length;
   }
 
@@ -102,6 +103,48 @@ class SyncManager {
       AppConstants.epUploadBukti,
       data: formData,
     );
+  }
+
+  String _getUserIdFromToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return '';
+      String payload = parts[1];
+      String normalized = base64Url.normalize(payload);
+      String resp = utf8.decode(base64Url.decode(normalized));
+      return jsonDecode(resp)['sub'] ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Klaim surat yang berstatus draft menjadi tugas kurir (dikirim).
+  Future<bool> takeSurat(String uuid) async {
+    try {
+      // Get auth token from interceptor or storage
+      final authHeader = _dio.options.headers['Authorization'] ?? '';
+      final token = authHeader.toString().replaceFirst('Bearer ', '');
+      final myUid = _getUserIdFromToken(token);
+
+      if (myUid.isEmpty) return false;
+
+      final String restUrl = '${_dio.options.baseUrl.replaceFirst('/functions/v1', '/rest/v1')}/surat_ekspedisi';
+      
+      await _dio.patch(
+        '$restUrl?uuid=eq.$uuid',
+        data: {
+          'status': 'dikirim',
+          'kurir_id': myUid,
+        },
+      );
+      
+      // Update local db
+      await _repository.updateStatusAndKurir(uuid, 'dikirim', myUid);
+      // SyncManager is usually followed by UI refresh
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   /// Siklus penuh: download lalu upload.

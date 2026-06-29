@@ -96,6 +96,17 @@ class ExpeditionRepository {
     );
   }
 
+  /// Perbarui status dan kurir_id untuk surat (misal saat klaim surat draft)
+  Future<void> updateStatusAndKurir(String uuid, String status, String kurirId) async {
+    final db = await _db;
+    await db.update(
+      AppConstants.tableExpeditions,
+      {'status': status, 'kurir_id': kurirId},
+      where: 'uuid = ?',
+      whereArgs: [uuid],
+    );
+  }
+
   /// Hapus semua data (mis. saat logout).
   Future<void> clear() async {
     final db = await _db;

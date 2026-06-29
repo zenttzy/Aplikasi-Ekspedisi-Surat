@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/di/service_locator.dart';
+import '../../core/sync/sync_manager.dart';
+import '../expeditions/data/expedition_model.dart';
 import '../expeditions/data/expedition_repository.dart';
+import '../expeditions/presentation/expedition_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isConfigured;
@@ -17,29 +20,64 @@ class _HomePageState extends State<HomePage> {
   int? _count;
   String? _error;
   bool _isSyncing = false;
+  List<Expedition> _expeditions = [];
 
   @override
   void initState() {
     super.initState();
     _loadCount();
-    // Simulate auto-sync on init
-    _simulateAutoSync();
+    // Perform sync on init if configured
+    if (widget.isConfigured) {
+      _performSync();
+    }
   }
 
   Future<void> _loadCount() async {
     try {
       final repo = sl<ExpeditionRepository>();
       final items = await repo.getAll();
-      if (mounted) setState(() => _count = items.length);
+      if (mounted) {
+        setState(() {
+          _expeditions = items;
+          _count = items.length;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
   }
 
-  Future<void> _simulateAutoSync() async {
-    setState(() => _isSyncing = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _isSyncing = false);
+  Future<void> _performSync() async {
+    if (_isSyncing) return;
+    setState(() {
+      _isSyncing = true;
+      _error = null;
+    });
+    try {
+      final syncManager = sl<SyncManager>();
+      final result = await syncManager.syncAll();
+      if (!result.isSuccess) {
+        setState(() => _error = result.error);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Sync Berhasil: ${result.downloaded} diunduh, ${result.uploaded} diunggah',
+              ),
+              backgroundColor: Colors.green.shade600,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      await _loadCount();
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
   }
 
   @override
@@ -61,7 +99,7 @@ class _HomePageState extends State<HomePage> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1565C0))
                   )
                 : const Icon(Icons.sync),
-            onPressed: _isSyncing ? null : _simulateAutoSync,
+            onPressed: _isSyncing ? null : _performSync,
             tooltip: 'Sync Data',
           ),
           const SizedBox(width: 8),
@@ -70,7 +108,7 @@ class _HomePageState extends State<HomePage> {
       drawer: _buildSidebar(theme),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _simulateAutoSync,
+          onRefresh: _performSync,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(20),
@@ -118,14 +156,82 @@ class _HomePageState extends State<HomePage> {
                   : const SizedBox.shrink(),
                   
                 if (_error != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                      child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                    ),
                   ),
                   
-                // Empty state for now
-                if (!_isSyncing && _count == 0)
+                // List of Expeditions
+                if (!_isSyncing && _expeditions.isNotEmpty)
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _expeditions.length,
+                    itemBuilder: (context, index) {
+                      final item = _expeditions[index];
+                      Color statusColor = Colors.orange;
+                      if (item.status == 'diterima') statusColor = Colors.green;
+                      if (item.status == 'draft') statusColor = Colors.grey;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        color: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: statusColor.withOpacity(0.1),
+                            child: Icon(Icons.mail_outline, color: statusColor, size: 20),
+                          ),
+                          title: Text(
+                            item.nomorSurat ?? 'EKS-Tanpa-Nomor',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text('Perihal: ${item.perihal}'),
+                              Text('Tujuan: ${item.divisiTujuan}'),
+                            ],
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              item.status.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ExpeditionDetailPage(expedition: item),
+                              ),
+                            );
+                            _loadCount();
+                          },
+                        ),
+                      ).animate().fadeIn(delay: (index * 100).ms);
+                    },
+                  ),
+
+                // Empty state
+                if (!_isSyncing && _expeditions.isEmpty)
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
@@ -222,22 +328,23 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          // Placeholder for list
+          // Actual list in Drawer
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.zero,
-              itemCount: _count ?? 0,
+              itemCount: _expeditions.length,
               itemBuilder: (context, index) {
+                final item = _expeditions[index];
                 return ListTile(
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFFF1F5F9),
                     child: Icon(Icons.mail_outline, size: 20, color: Color(0xFF64748B)),
                   ),
-                  title: Text('Surat EKS-${index + 1}'),
-                  subtitle: const Text('Tujuan: Divisi SDM'),
+                  title: Text(item.nomorSurat ?? 'EKS-Tanpa-Nomor'),
+                  subtitle: Text('Tujuan: ${item.divisiTujuan}'),
                   trailing: const Icon(Icons.chevron_right, size: 20),
                   onTap: () {
-                    // TODO: Navigate to detail
+                    // Navigate to detail
                   },
                 );
               },

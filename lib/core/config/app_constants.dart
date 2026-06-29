@@ -10,7 +10,6 @@ class AppConstants {
   static const String tableExpeditions = 'expeditions';
 
   // ---- Endpoint Edge Functions ----
-  static const String epSyncDownload = '/functions/v1/sync-download';
 
   /// Upload bukti per surat via Edge Function (surat_id dikirim lewat form data).
   static const String epUploadBukti = '/functions/v1/sync-proof';

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../core/di/service_locator.dart';
+import '../auth/data/auth_repository.dart';
+import '../auth/presentation/login_page.dart';
 import '../home/home_page.dart';
 
 class SplashPage extends StatefulWidget {
@@ -21,11 +25,16 @@ class _SplashPageState extends State<SplashPage> {
     // Wait for 3 seconds
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-    
-    // Navigate to Home/Login
+
+    final isLoggedIn = await sl<AuthRepository>().isLoggedIn;
+    if (!mounted) return;
+
+    // Navigate to Login/Home Page based on session status
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => HomePage(isConfigured: widget.isConfigured),
+        pageBuilder: (context, animation, secondaryAnimation) => isLoggedIn
+            ? HomePage(isConfigured: widget.isConfigured)
+            : LoginPage(isConfigured: widget.isConfigured),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },

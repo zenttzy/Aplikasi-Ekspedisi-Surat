@@ -43,6 +43,9 @@ class Expedition extends Equatable {
   /// Status surat: 'draft' | 'dikirim' | 'diterima'.
   final String status;
 
+  /// ID kurir yang mengambil tugas.
+  final String? kurirId;
+
   /// 1 jika sudah tersinkron dengan server, 0 jika belum.
   final bool isSynced;
 
@@ -63,6 +66,7 @@ class Expedition extends Equatable {
     this.long,
     this.alamat,
     this.status = ExpeditionStatus.dikirim,
+    this.kurirId,
     this.isSynced = false,
     this.needsUpload = false,
   });
@@ -82,6 +86,7 @@ class Expedition extends Equatable {
     double? long,
     String? alamat,
     String? status,
+    String? kurirId,
     bool? isSynced,
     bool? needsUpload,
   }) {
@@ -99,6 +104,7 @@ class Expedition extends Equatable {
       long: long ?? this.long,
       alamat: alamat ?? this.alamat,
       status: status ?? this.status,
+      kurirId: kurirId ?? this.kurirId,
       isSynced: isSynced ?? this.isSynced,
       needsUpload: needsUpload ?? this.needsUpload,
     );
@@ -120,6 +126,7 @@ class Expedition extends Equatable {
       'long': long,
       'alamat': alamat,
       'status': status,
+      'kurir_id': kurirId,
       'is_synced': isSynced ? 1 : 0,
       'needs_upload': needsUpload ? 1 : 0,
     };
@@ -141,29 +148,42 @@ class Expedition extends Equatable {
       long: (map['long'] as num?)?.toDouble(),
       alamat: map['alamat'] as String?,
       status: (map['status'] as String?) ?? ExpeditionStatus.dikirim,
+      kurirId: map['kurir_id'] as String?,
       isSynced: (map['is_synced'] as int? ?? 0) == 1,
       needsUpload: (map['needs_upload'] as int? ?? 0) == 1,
     );
   }
 
-  /// Membuat instance dari payload JSON `/sync/download`.
-  ///
-  /// Server memakai nama field `divisi_pengirim_nama` & `divisi_tujuan_nama`.
+  /// Membuat instance dari payload JSON `/sync/download` atau Supabase REST API.
   factory Expedition.fromSyncJson(Map<String, dynamic> json) {
+    String pengirim = '';
+    final rawPengirim = json['divisi_pengirim'];
+    if (rawPengirim is Map) {
+      pengirim = (rawPengirim['nama_divisi'] as String?) ?? '';
+    } else if (rawPengirim is String) {
+      pengirim = rawPengirim;
+    }
+    pengirim = (json['divisi_pengirim_nama'] as String?) ?? pengirim;
+
+    String tujuan = '';
+    final rawTujuan = json['divisi_tujuan'];
+    if (rawTujuan is Map) {
+      tujuan = (rawTujuan['nama_divisi'] as String?) ?? '';
+    } else if (rawTujuan is String) {
+      tujuan = rawTujuan;
+    }
+    tujuan = (json['divisi_tujuan_nama'] as String?) ?? tujuan;
+
     return Expedition(
       uuid: json['uuid'] as String,
       nomorSurat: json['nomor_surat'] as String?,
       perihal: (json['perihal'] as String?) ?? '',
-      divisiPengirim: (json['divisi_pengirim_nama'] as String?) ??
-          (json['divisi_pengirim'] as String?) ??
-          '',
-      divisiTujuan: (json['divisi_tujuan_nama'] as String?) ??
-          (json['divisi_tujuan'] as String?) ??
-          '',
+      divisiPengirim: pengirim,
+      divisiTujuan: tujuan,
       penerima: json['nama_penerima'] as String?,
       tanggalDiterima: json['tanggal_penerimaan'] as String?,
       status: (json['status'] as String?) ?? ExpeditionStatus.dikirim,
-      // Data dari server dianggap sudah tersinkron.
+      kurirId: json['kurir_id'] as String?,
       isSynced: true,
       needsUpload: false,
     );
@@ -184,6 +204,7 @@ class Expedition extends Equatable {
         long,
         alamat,
         status,
+        kurirId,
         isSynced,
         needsUpload,
       ];
