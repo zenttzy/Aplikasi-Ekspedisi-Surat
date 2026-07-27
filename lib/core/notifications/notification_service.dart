@@ -2,10 +2,45 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 
-/// Background message handler — must be top-level function
+const _channelId = 'surat_channel';
+const _channelName = 'Surat Ekspedisi';
+
+final _localNotif = FlutterLocalNotificationsPlugin();
+
+/// Background/terminated handler — top-level, shows local notification
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  // No-op: local notification is shown by FCM automatically in background
+  await _initLocalNotif();
+  _showLocalNotif(message);
+}
+
+Future<void> _initLocalNotif() async {
+  const initSettings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+  await _localNotif.initialize(initSettings);
+}
+
+void _showLocalNotif(RemoteMessage message) {
+  final notification = message.notification;
+  final title = notification?.title ?? message.data['title'] ?? 'Surat Baru';
+  final body = notification?.body ?? message.data['body'] ?? '';
+  _localNotif.show(
+    message.hashCode,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: 'Notifikasi surat ekspedisi masuk',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+  );
 }
 
 class NotificationService {
@@ -14,28 +49,27 @@ class NotificationService {
   NotificationService._();
 
   final _fcm = FirebaseMessaging.instance;
-  final _localNotif = FlutterLocalNotificationsPlugin();
-
-  static const _channelId = 'surat_channel';
-  static const _channelName = 'Surat Ekspedisi';
 
   Future<void> init() async {
     // Register background handler
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-    // Request permission (Android 13+ / iOS)
-    await _fcm.requestPermission(
+    // Request permission
+    final settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
+      provisional: false,
     );
+    debugPrint('[FCM] Permission: ${settings.authorizationStatus}');
 
-    // Setup local notifications channel (Android)
+    // Create notification channel (Android 8+)
     const androidChannel = AndroidNotificationChannel(
       _channelId,
       _channelName,
       description: 'Notifikasi surat ekspedisi masuk',
-      importance: Importance.high,
+      importance: Importance.max,
+      playSound: true,
     );
     await _localNotif
         .resolvePlatformSpecificImplementation<
@@ -43,47 +77,39 @@ class NotificationService {
         ?.createNotificationChannel(androidChannel);
 
     // Init local notifications
-    const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    await _initLocalNotif();
+
+    // Show heads-up notification when app is in FOREGROUND
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
     );
-    await _localNotif.initialize(initSettings);
 
-    // Show notification when app is in foreground
+    // Foreground message listener
     FirebaseMessaging.onMessage.listen((message) {
-      final notification = message.notification;
-      if (notification == null) return;
-      _localNotif.show(
-        notification.hashCode,
-        notification.title,
-        notification.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            _channelName,
-            channelDescription: 'Notifikasi surat ekspedisi masuk',
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
-          ),
-        ),
-      );
+      debugPrint('[FCM] Foreground message: ${message.messageId}');
+      _showLocalNotif(message);
     });
 
-    // Handle notification tap when app in background (not terminated)
+    // Notification tapped (background)
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      debugPrint('[FCM] Tapped notification: ${message.data}');
+      debugPrint('[FCM] Opened from background: ${message.data}');
     });
 
-    // Handle notification tap when app was terminated
+    // Notification tapped (terminated)
     final initial = await _fcm.getInitialMessage();
     if (initial != null) {
-      debugPrint('[FCM] Launched from notification: ${initial.data}');
+      debugPrint('[FCM] Launched from terminated: ${initial.data}');
     }
   }
 
-  /// Get FCM token for this device
-  Future<String?> getToken() => _fcm.getToken();
+  Future<String?> getToken() async {
+    final token = await _fcm.getToken();
+    debugPrint('[FCM] Token: $token');
+    return token;
+  }
 
-  /// Stream of token refreshes
   Stream<String> get onTokenRefresh => _fcm.onTokenRefresh;
 }
