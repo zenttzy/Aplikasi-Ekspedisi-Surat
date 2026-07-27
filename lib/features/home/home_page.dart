@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/di/service_locator.dart';
@@ -6,6 +7,7 @@ import '../auth/data/auth_repository.dart';
 import '../auth/presentation/login_page.dart';
 import '../expeditions/data/api_surat_repository.dart';
 import '../expeditions/data/expedition_model.dart';
+import '../expeditions/presentation/confirmation_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isConfigured;
@@ -21,11 +23,39 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   String? _kurirNama;
   String _filter = 'semua';
+  Timer? _pollTimer;
+  int _prevDraftCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _silentRefresh());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _silentRefresh() async {
+    try {
+      final list = await sl<ApiSuratRepository>().fetchSurat();
+      final newDraftCount = list.where((s) => s.status == ExpeditionStatus.draft).length;
+      if (mounted) {
+        if (newDraftCount > _prevDraftCount) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${newDraftCount - _prevDraftCount} surat baru tersedia!'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        setState(() { _suratList = list; _prevDraftCount = newDraftCount; });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadData() async {
@@ -34,6 +64,7 @@ class _HomePageState extends State<HomePage> {
       final user = await sl<AuthRepository>().getCurrentUser();
       _kurirNama = user?['nama_lengkap'] as String? ?? 'Kurir';
       final list = await sl<ApiSuratRepository>().fetchSurat();
+      _prevDraftCount = list.where((s) => s.status == ExpeditionStatus.draft).length;
       setState(() { _suratList = list; });
     } catch (e) {
       setState(() { _error = e.toString(); });
@@ -69,12 +100,17 @@ class _HomePageState extends State<HomePage> {
         _loadData();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+      );
     }
+  }
+
+  Future<void> _konfirmasiPenerimaan(Expedition surat) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => ConfirmationPage(surat: surat)),
+    );
+    if (result == true) _loadData();
   }
 
   Future<void> _logout() async {
@@ -116,7 +152,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildFilterBar(ThemeData theme) {
     final filters = [
       ('semua', 'Semua'),
-      (ExpeditionStatus.draft, 'Draft'),
+      (ExpeditionStatus.draft, 'Tersedia'),
       (ExpeditionStatus.dikirim, 'Dikirim'),
       (ExpeditionStatus.diterima, 'Diterima'),
     ];
@@ -143,9 +179,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody(ThemeData theme) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
         child: Padding(
@@ -190,6 +224,7 @@ class _HomePageState extends State<HomePage> {
     final statusColor = _statusColor(surat.status, theme);
     final statusLabel = _statusLabel(surat.status);
     final isDraft = surat.status == ExpeditionStatus.draft;
+    final isDikirim = surat.status == ExpeditionStatus.dikirim;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -201,11 +236,9 @@ class _HomePageState extends State<HomePage> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    surat.nomorSurat ?? '-',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(surat.nomorSurat ?? '-',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -221,40 +254,47 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 8),
             Text(surat.perihal, style: const TextStyle(fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.send_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Expanded(child: Text(surat.divisiPengirim, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-              ],
-            ),
+            Row(children: [
+              const Icon(Icons.send_outlined, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              Expanded(child: Text(surat.divisiPengirim, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+            ]),
             const SizedBox(height: 2),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Expanded(child: Text(surat.divisiTujuan, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-              ],
-            ),
+            Row(children: [
+              const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              Expanded(child: Text(surat.divisiTujuan, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+            ]),
             if (surat.penerima != null) ...[
               const SizedBox(height: 2),
+              Row(children: [
+                const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(surat.penerima!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ]),
+            ],
+            if (isDraft || isDikirim) ...[
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(surat.penerima!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  if (isDraft) Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _ambilSurat(surat),
+                      icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                      label: const Text('Ambil'),
+                    ),
+                  ),
+                  if (isDikirim) ...[
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _konfirmasiPenerimaan(surat),
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Konfirmasi Terima'),
+                        style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                      ),
+                    ),
+                  ],
                 ],
-              ),
-            ],
-            if (isDraft) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => _ambilSurat(surat),
-                  icon: const Icon(Icons.local_shipping_outlined, size: 18),
-                  label: const Text('Ambil & Kirim'),
-                ),
               ),
             ],
           ],
