@@ -92,7 +92,7 @@ class _ExpeditionDetailPageState extends State<ExpeditionDetailPage> {
       fotoPath: result['foto_path'] as String,
       fotoHash: result['foto_hash'] as String,
       lat: result['latitude'] as double,
-      long: result['longitude'] as double,
+      lng: result["longitude"] as double,
       alamat: result['alamat'] as String,
       penerima: namaPenerima,
       tanggalDiterima: DateTime.now().toLocal().toString().substring(0, 19),

@@ -100,7 +100,7 @@ class SyncManager {
     });
 
     await _dio.post(
-      AppConstants.epSurat + "/" + exp.uuid + "/bukti",
+      "${AppConstants.epSurat}/${exp.uuid}/bukti",
       data: formData,
     );
   }
