@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 
 import '../../../core/config/app_constants.dart';
@@ -13,6 +14,8 @@ class ApiSuratRepository {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
       headers: {'Content-Type': 'application/json'},
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
     ));
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -28,7 +31,10 @@ class ApiSuratRepository {
   Future<List<Expedition>> fetchSurat() async {
     final res = await _dio.get(AppConstants.epSurat);
     final list = res.data as List<dynamic>;
-    return list.map((json) => Expedition.fromServerJson(json as Map<String, dynamic>)).toList();
+    return list
+        .map((json) =>
+            Expedition.fromServerJson(json as Map<String, dynamic>))
+        .toList();
   }
 
   Future<bool> ambilSurat(String uuid) async {
@@ -39,6 +45,33 @@ class ApiSuratRepository {
       'status': ExpeditionStatus.dikirim,
       'kurir_id': kurirId,
     });
+    return true;
+  }
+
+  /// Upload bukti foto + GPS + nama penerima ke endpoint
+  /// POST /api/surat/:uuid/bukti  (multipart)
+  Future<bool> uploadBukti({
+    required String uuid,
+    required File foto,
+    required double lat,
+    required double lng,
+    required String namaPenerima,
+  }) async {
+    final formData = FormData.fromMap({
+      'foto': await MultipartFile.fromFile(
+        foto.path,
+        filename: 'bukti_$uuid.jpg',
+      ),
+      'lat': lat.toString(),
+      'long': lng.toString(),
+      'nama_penerima': namaPenerima,
+    });
+
+    await _dio.post(
+      '${AppConstants.epSurat}/$uuid/bukti',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
     return true;
   }
 }
