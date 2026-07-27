@@ -146,7 +146,7 @@ class _ExpeditionDetailPageState extends State<ExpeditionDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+
     final isDiterima = _expedition.status == ExpeditionStatus.diterima;
     final isDraft = _expedition.status == 'draft';
 
