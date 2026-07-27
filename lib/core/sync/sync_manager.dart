@@ -57,7 +57,7 @@ class SyncManager {
 
     final rawList = res.data as List;
     final items = rawList
-        .map((e) => Expedition.fromSyncJson(e as Map<String, dynamic>))
+        .map((e) => Expedition.fromServerJson(e as Map<String, dynamic>))
         .toList();
 
     await _repository.upsertAll(items);
@@ -95,12 +95,12 @@ class SyncManager {
       'penerima': exp.penerima,
       'tanggal_diterima': exp.tanggalDiterima,
       'lat': exp.lat,
-      'lon': exp.long,
+      'lon': exp.lng,
       'hash': exp.fotoHash,
     });
 
     await _dio.post(
-      AppConstants.epUploadBukti,
+      AppConstants.epSurat + "/" + exp.uuid + "/bukti",
       data: formData,
     );
   }

@@ -22,7 +22,7 @@ class ExpeditionRepository {
       AppConstants.tableExpeditions,
       orderBy: 'status ASC, nomor_surat DESC',
     );
-    return rows.map(Expedition.fromDbMap).toList();
+    return rows.map(Expedition.fromSqlite).toList();
   }
 
   /// Ambil surat berdasarkan status (mis. 'dikirim' untuk daftar surat masuk).
@@ -34,7 +34,7 @@ class ExpeditionRepository {
       whereArgs: [status],
       orderBy: 'nomor_surat DESC',
     );
-    return rows.map(Expedition.fromDbMap).toList();
+    return rows.map(Expedition.fromSqlite).toList();
   }
 
   /// Ambil satu surat by UUID.
@@ -47,7 +47,7 @@ class ExpeditionRepository {
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    return Expedition.fromDbMap(rows.first);
+    return Expedition.fromSqlite(rows.first);
   }
 
   /// Surat yang menunggu diunggah ke server (`needs_upload = 1`).
@@ -58,7 +58,7 @@ class ExpeditionRepository {
       where: 'needs_upload = 1',
       whereArgs: [],
     );
-    return rows.map(Expedition.fromDbMap).toList();
+    return rows.map(Expedition.fromSqlite).toList();
   }
 
   /// Insert atau update (upsert) berdasarkan UUID.
@@ -66,7 +66,7 @@ class ExpeditionRepository {
     final db = await _db;
     await db.insert(
       AppConstants.tableExpeditions,
-      exp.toDbMap(),
+      exp.toSqliteMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -78,7 +78,7 @@ class ExpeditionRepository {
     for (final exp in list) {
       batch.insert(
         AppConstants.tableExpeditions,
-        exp.toDbMap(),
+        exp.toSqliteMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }

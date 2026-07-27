@@ -10,6 +10,7 @@ class AppConstants {
   static const String epRegister = '/auth/register';
   static const String epMe = '/auth/me';
   static const String epSurat = '/surat';
+  static const String epUploadBukti = '/surat';
 
   // Secure storage keys
   static const String keyAccessToken = 'access_token';
@@ -19,6 +20,7 @@ class AppConstants {
 
   // Shared prefs
   static const String prefLastSyncAt = 'last_sync_at';
+  static const String prefDeviceId = 'device_id';
 }
 
 class ExpeditionStatus {

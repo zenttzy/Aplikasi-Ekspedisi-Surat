@@ -202,7 +202,7 @@ class _ExpeditionDetailPageState extends State<ExpeditionDetailPage> {
                       const Divider(),
                       _buildInfoRow('Waktu Penerimaan', _expedition.tanggalDiterima ?? '-'),
                       const Divider(),
-                      _buildInfoRow('Koordinat GPS', '${_expedition.lat ?? 0.0}, ${_expedition.long ?? 0.0}'),
+                      _buildInfoRow('Koordinat GPS', '${_expedition.lat ?? 0.0}, ${_expedition.lng ?? 0.0}'),
                       const Divider(),
                       _buildInfoRow('Alamat Lokasi', _expedition.alamat ?? '-'),
                       const Divider(),

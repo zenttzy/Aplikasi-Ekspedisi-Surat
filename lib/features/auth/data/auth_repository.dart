@@ -84,6 +84,8 @@ class AuthRepository {
     }
   }
 
+  Future<bool> get isLoggedIn => _storage.hasSession;
+
   Future<void> logout() async {
     await _storage.clearAll();
   }
