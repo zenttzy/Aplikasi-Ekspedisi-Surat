@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/di/service_locator.dart';
-import '../../core/sync/sync_manager.dart';
+import '../../core/config/app_constants.dart';
+import '../auth/data/auth_repository.dart';
+import '../auth/presentation/login_page.dart';
+import '../expeditions/data/api_surat_repository.dart';
 import '../expeditions/data/expedition_model.dart';
-import '../expeditions/data/expedition_repository.dart';
-import '../expeditions/presentation/expedition_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isConfigured;
-
   const HomePage({super.key, required this.isConfigured});
 
   @override
@@ -17,341 +16,266 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int? _count;
+  List<Expedition> _suratList = [];
+  bool _loading = true;
   String? _error;
-  bool _isSyncing = false;
-  List<Expedition> _expeditions = [];
+  String? _kurirNama;
+  String _filter = 'semua';
 
   @override
   void initState() {
     super.initState();
-    _loadCount();
-    // Perform sync on init if configured
-    if (widget.isConfigured) {
-      _performSync();
-    }
+    _loadData();
   }
 
-  Future<void> _loadCount() async {
+  Future<void> _loadData() async {
+    setState(() { _loading = true; _error = null; });
     try {
-      final repo = sl<ExpeditionRepository>();
-      final items = await repo.getAll();
-      if (mounted) {
-        setState(() {
-          _expeditions = items;
-          _count = items.length;
-        });
-      }
+      final user = await sl<AuthRepository>().getCurrentUser();
+      _kurirNama = user?['nama_lengkap'] as String? ?? 'Kurir';
+      final list = await sl<ApiSuratRepository>().fetchSurat();
+      setState(() { _suratList = list; });
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
-  }
-
-  Future<void> _performSync() async {
-    if (_isSyncing) return;
-    setState(() {
-      _isSyncing = true;
-      _error = null;
-    });
-    try {
-      final syncManager = sl<SyncManager>();
-      final result = await syncManager.syncAll();
-      if (!result.isSuccess) {
-        setState(() => _error = result.error);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Sync Berhasil: ${result.downloaded} diunduh, ${result.uploaded} diunggah',
-              ),
-              backgroundColor: Colors.green.shade600,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() { _error = e.toString(); });
     } finally {
-      await _loadCount();
-      if (mounted) {
-        setState(() => _isSyncing = false);
+      setState(() { _loading = false; });
+    }
+  }
+
+  List<Expedition> get _filtered {
+    if (_filter == 'semua') return _suratList;
+    return _suratList.where((s) => s.status == _filter).toList();
+  }
+
+  Future<void> _ambilSurat(Expedition surat) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ambil Surat'),
+        content: Text('Ambil surat ${surat.nomorSurat ?? surat.perihal}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ambil')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      final ok = await sl<ApiSuratRepository>().ambilSurat(surat.uuid);
+      if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Surat berhasil diambil'), backgroundColor: Colors.green),
+        );
+        _loadData();
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _logout() async {
+    await sl<AuthRepository>().logout();
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => LoginPage(isConfigured: widget.isConfigured)),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Slate 50
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Dashboard Kurir', style: TextStyle(fontWeight: FontWeight.w600)),
-        backgroundColor: Colors.white,
-        foregroundColor: theme.colorScheme.primary,
-        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ekspedisi Surat', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(_kurirNama ?? '', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: _isSyncing 
-                ? const SizedBox(
-                    width: 20, height: 20, 
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1565C0))
-                  )
-                : const Icon(Icons.sync),
-            onPressed: _isSyncing ? null : _performSync,
-            tooltip: 'Sync Data',
-          ),
-          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
-      drawer: _buildSidebar(theme),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _performSync,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Selamat Bertugas!',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1E293B), // Slate 800
-                  ),
-                ).animate().fadeIn().slideX(),
-                const SizedBox(height: 8),
-                Text(
-                  'Pantau dan selesaikan pengiriman surat hari ini.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B), // Slate 500
-                  ),
-                ).animate().fadeIn(delay: 200.ms).slideX(),
-                
-                const SizedBox(height: 24),
-                
-                // Stats Row
-                Row(
-                  children: [
-                    Expanded(child: _buildStatCard('Menunggu Diantar', '${_count ?? 0}', Colors.orange.shade700, Icons.local_shipping_outlined, 400.ms)),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildStatCard('Selesai Hari Ini', '0', Colors.green.shade600, Icons.check_circle_outline, 600.ms)),
-                  ],
-                ),
-                
-                const SizedBox(height: 32),
-                
-                Text(
-                  'Aktivitas Terbaru',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ).animate().fadeIn(delay: 800.ms),
-                const SizedBox(height: 16),
-                
-                _isSyncing 
-                  ? const LinearProgressIndicator(backgroundColor: Color(0xFFE2E8F0)).animate().fadeIn()
-                  : const SizedBox.shrink(),
-                  
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                      child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
-                    ),
-                  ),
-                  
-                // List of Expeditions
-                if (!_isSyncing && _expeditions.isNotEmpty)
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _expeditions.length,
-                    itemBuilder: (context, index) {
-                      final item = _expeditions[index];
-                      Color statusColor = Colors.orange;
-                      if (item.status == 'diterima') statusColor = Colors.green;
-                      if (item.status == 'draft') statusColor = Colors.grey;
+      body: Column(
+        children: [
+          _buildFilterBar(theme),
+          Expanded(child: _buildBody(theme)),
+        ],
+      ),
+    );
+  }
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.grey.shade200),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: statusColor.withOpacity(0.1),
-                            child: Icon(Icons.mail_outline, color: statusColor, size: 20),
-                          ),
-                          title: Text(
-                            item.nomorSurat ?? 'EKS-Tanpa-Nomor',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text('Perihal: ${item.perihal}'),
-                              Text('Tujuan: ${item.divisiTujuan}'),
-                            ],
-                          ),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              item.status.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: statusColor,
-                              ),
-                            ),
-                          ),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => ExpeditionDetailPage(expedition: item),
-                              ),
-                            );
-                            _loadCount();
-                          },
-                        ),
-                      ).animate().fadeIn(delay: (index * 100).ms);
-                    },
-                  ),
-
-                // Empty state
-                if (!_isSyncing && _expeditions.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Column(
-                        children: [
-                          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
-                          const SizedBox(height: 16),
-                          Text('Belum ada surat yang perlu diantar', style: TextStyle(color: Colors.grey.shade500)),
-                        ],
-                      ),
-                    ),
-                  ).animate().fadeIn(delay: 1000.ms),
-              ],
-            ),
-          ),
+  Widget _buildFilterBar(ThemeData theme) {
+    final filters = [
+      ('semua', 'Semua'),
+      (ExpeditionStatus.draft, 'Draft'),
+      (ExpeditionStatus.dikirim, 'Dikirim'),
+      (ExpeditionStatus.diterima, 'Diterima'),
+    ];
+    return Container(
+      color: theme.colorScheme.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: filters.map((entry) {
+            final selected = _filter == entry.$1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(entry.$2),
+                selected: selected,
+                onSelected: (_) => setState(() => _filter = entry.$1),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon, Duration animDelay) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+  Widget _buildBody(ThemeData theme) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: _loadData, child: const Text('Coba Lagi')),
+            ],
           ),
-        ],
+        ),
+      );
+    }
+    final list = _filtered;
+    if (list.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inbox_outlined, size: 64, color: theme.colorScheme.outline),
+            const SizedBox(height: 12),
+            const Text('Tidak ada surat', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: list.length,
+        itemBuilder: (context, index) => _buildSuratCard(list[index], theme),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
-    ).animate().scale(delay: animDelay, duration: 400.ms, curve: Curves.easeOutBack);
+    );
   }
 
-  Widget _buildSidebar(ThemeData theme) {
-    return Drawer(
-      backgroundColor: Colors.white,
-      child: Column(
-        children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: Color(0xFF1565C0)),
-            accountName: const Text('Kurir Aktif', style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: const Text('Status: Online & Tersinkronisasi'),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.person, color: Color(0xFF1565C0), size: 36),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.home_outlined),
-            title: const Text('Dashboard'),
-            onTap: () => Navigator.pop(context),
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
+  Widget _buildSuratCard(Expedition surat, ThemeData theme) {
+    final statusColor = _statusColor(surat.status, theme);
+    final statusLabel = _statusLabel(surat.status);
+    final isDraft = surat.status == ExpeditionStatus.draft;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  'DAFTAR KIRIMAN',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    color: Colors.grey.shade600,
+                Expanded(
+                  child: Text(
+                    surat.nomorSurat ?? '-',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(statusLabel,
+                      style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
-          ),
-          // Actual list in Drawer
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: _expeditions.length,
-              itemBuilder: (context, index) {
-                final item = _expeditions[index];
-                return ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFF1F5F9),
-                    child: Icon(Icons.mail_outline, size: 20, color: Color(0xFF64748B)),
-                  ),
-                  title: Text(item.nomorSurat ?? 'EKS-Tanpa-Nomor'),
-                  subtitle: Text('Tujuan: ${item.divisiTujuan}'),
-                  trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () {
-                    // Navigate to detail
-                  },
-                );
-              },
+            const SizedBox(height: 8),
+            Text(surat.perihal, style: const TextStyle(fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.send_outlined, size: 14, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(child: Text(surat.divisiPengirim, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(child: Text(surat.divisiTujuan, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+              ],
+            ),
+            if (surat.penerima != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(surat.penerima!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ],
+            if (isDraft) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _ambilSurat(surat),
+                  icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                  label: const Text('Ambil & Kirim'),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
+  }
+
+  Color _statusColor(String status, ThemeData theme) {
+    switch (status) {
+      case ExpeditionStatus.dikirim: return Colors.orange;
+      case ExpeditionStatus.diterima: return Colors.green;
+      default: return theme.colorScheme.primary;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case ExpeditionStatus.dikirim: return 'Sedang Dikirim';
+      case ExpeditionStatus.diterima: return 'Diterima';
+      default: return 'Tersedia';
+    }
   }
 }

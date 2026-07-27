@@ -1,35 +1,28 @@
-/// Konstanta global aplikasi: nama tabel/kolom SQLite, key penyimpanan,
-/// dan endpoint API. Dipusatkan agar konsisten antara DB lokal dan sync.
 class AppConstants {
   AppConstants._();
 
-  // ---- Database lokal (SQLite) ----
   static const String dbName = 'ekspedisi_surat.db';
   static const int dbVersion = 1;
-
   static const String tableExpeditions = 'expeditions';
 
-  // ---- Endpoint Edge Functions ----
+  // REST API endpoints
+  static const String epLogin = '/auth/login';
+  static const String epRegister = '/auth/register';
+  static const String epMe = '/auth/me';
+  static const String epSurat = '/surat';
 
-  /// Upload bukti per surat via Edge Function (surat_id dikirim lewat form data).
-  static const String epUploadBukti = '/functions/v1/sync-proof';
-
-  // ---- Endpoint Supabase Auth ----
-  static const String epAuthToken = '/token';
-
-  // ---- Key secure storage ----
+  // Secure storage keys
   static const String keyAccessToken = 'access_token';
-  static const String keyRefreshToken = 'refresh_token';
+  static const String keyUserId = 'user_id';
+  static const String keyUserRole = 'user_role';
+  static const String keyUserData = 'user_data';
 
-  // ---- Key shared preferences ----
+  // Shared prefs
   static const String prefLastSyncAt = 'last_sync_at';
-  static const String prefDeviceId = 'device_id';
 }
 
-/// Status surat ekspedisi (selaras dengan server: draft/dikirim/diterima).
 class ExpeditionStatus {
   ExpeditionStatus._();
-
   static const String draft = 'draft';
   static const String dikirim = 'dikirim';
   static const String diterima = 'diterima';
