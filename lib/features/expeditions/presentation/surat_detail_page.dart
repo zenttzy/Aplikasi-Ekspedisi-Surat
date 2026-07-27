@@ -165,7 +165,7 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceVariant.withOpacity(0.3),
+      backgroundColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
       appBar: AppBar(
         title: Text(_expedition.nomorSurat ?? 'Detail Surat'),
         centerTitle: false,
