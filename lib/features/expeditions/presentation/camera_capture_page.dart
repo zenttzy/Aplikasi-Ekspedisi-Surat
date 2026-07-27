@@ -234,6 +234,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> with WidgetsBindi
         _isProcessing = false;
         _statusText = 'Error: ${e.toString()}';
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal mengambil foto: $e')),
       );
