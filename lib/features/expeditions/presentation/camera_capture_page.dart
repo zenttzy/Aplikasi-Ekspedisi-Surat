@@ -9,10 +9,12 @@ import '../../../core/utils/image_watermark_util.dart';
 
 class CameraCapturePage extends StatefulWidget {
   final String nomorSurat;
+  final String namaPenerima;
 
   const CameraCapturePage({
     super.key,
     required this.nomorSurat,
+    required this.namaPenerima,
   });
 
   @override
@@ -213,6 +215,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> with WidgetsBindi
         latitude: lat,
         longitude: lon,
         address: _currentAddress,
+        namaPenerima: widget.namaPenerima,
       );
 
       // Hapus foto asli temporer untuk menghemat ruang

@@ -20,12 +20,16 @@ class SuratDetailPage extends StatefulWidget {
 class _SuratDetailPageState extends State<SuratDetailPage> {
   late Expedition _expedition;
   final _penerimaCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   bool _uploading = false;
 
   @override
   void initState() {
     super.initState();
     _expedition = widget.expedition;
+    if (_expedition.penerima != null) {
+      _penerimaCtrl.text = _expedition.penerima!;
+    }
   }
 
   @override
@@ -36,12 +40,25 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
 
   bool get _isDikirim => _expedition.status == ExpeditionStatus.dikirim;
   bool get _isDiterima => _expedition.status == ExpeditionStatus.diterima;
+  bool get _canTakePhoto => _penerimaCtrl.text.trim().isNotEmpty;
 
   Future<void> _openCamera() async {
+    if (!_canTakePhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Masukkan nama penerima terlebih dahulu'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final namaPenerima = _penerimaCtrl.text.trim();
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => CameraCapturePage(
           nomorSurat: _expedition.nomorSurat ?? 'Tanpa Nomor',
+          namaPenerima: namaPenerima,
         ),
       ),
     );
@@ -53,7 +70,10 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
 
     if (fotoPath == null || fotoPath.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto tidak tersedia, coba ambil ulang'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Foto tidak tersedia, coba ambil ulang'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -61,63 +81,14 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     if (!await foto.exists()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File foto tidak ditemukan'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('File foto tidak ditemukan'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
       return;
     }
-
-    _penerimaCtrl.clear();
-    if (!mounted) return;
-    final String? namaPenerima = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nama Penerima'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Masukkan nama penerima atau perwakilan surat ini.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _penerimaCtrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Nama Penerima',
-                hintText: 'Contoh: Budi Santoso',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-              onSubmitted: (v) {
-                if (v.trim().isNotEmpty) Navigator.of(ctx).pop(v.trim());
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = _penerimaCtrl.text.trim();
-              if (name.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Nama tidak boleh kosong')),
-                );
-                return;
-              }
-              Navigator.of(ctx).pop(name);
-            },
-            child: const Text('Konfirmasi'),
-          ),
-        ],
-      ),
-    );
-
-    if (namaPenerima == null || !mounted) return;
 
     setState(() => _uploading = true);
     try {
@@ -151,7 +122,10 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload gagal: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Upload gagal: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -175,7 +149,7 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.white.withOpacity(0.3),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(_expedition.nomorSurat ?? 'Detail Surat'),
         centerTitle: false,
@@ -196,87 +170,143 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
             )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _StatusBanner(status: _expedition.status),
-                  const SizedBox(height: 16),
-                  _InfoCard(
-                    title: 'Informasi Surat',
-                    icon: Icons.mail_outline,
-                    children: [
-                      _InfoRow('Nomor Surat', _expedition.nomorSurat ?? '-'),
-                      _InfoRow('Perihal', _expedition.perihal),
-                      _InfoRow('Pengirim (Divisi)', _expedition.divisiPengirim.isEmpty ? '-' : _expedition.divisiPengirim),
-                      _InfoRow('Tujuan (Divisi)', _expedition.divisiTujuan.isEmpty ? '-' : _expedition.divisiTujuan),
-                      if (_expedition.tanggalDiterima != null)
-                        _InfoRow('Tanggal Diterima', _formatTanggal(_expedition.tanggalDiterima)),
-                    ],
-                  ),
-                  if (_isDiterima && _expedition.penerima != null) ...[
-                    const SizedBox(height: 12),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _StatusBanner(status: _expedition.status),
+                    const SizedBox(height: 16),
                     _InfoCard(
-                      title: 'Bukti Pengiriman',
-                      icon: Icons.verified_outlined,
+                      title: 'Informasi Surat',
+                      icon: Icons.mail_outline,
                       children: [
-                        _InfoRow('Nama Penerima', _expedition.penerima!),
-                        if (_expedition.lat != null && _expedition.lng != null)
-                          _InfoRow('Koordinat GPS', '${_expedition.lat!.toStringAsFixed(6)}, ${_expedition.lng!.toStringAsFixed(6)}'),
+                        _InfoRow('Nomor Surat', _expedition.nomorSurat ?? '-'),
+                        _InfoRow('Perihal', _expedition.perihal),
+                        _InfoRow(
+                          'Pengirim (Divisi)',
+                          _expedition.divisiPengirim.isEmpty
+                              ? '-'
+                              : _expedition.divisiPengirim,
+                        ),
+                        _InfoRow(
+                          'Tujuan (Divisi)',
+                          _expedition.divisiTujuan.isEmpty
+                              ? '-'
+                              : _expedition.divisiTujuan,
+                        ),
+                        if (_expedition.tanggalDiterima != null)
+                          _InfoRow(
+                            'Tanggal Diterima',
+                            _formatTanggal(_expedition.tanggalDiterima),
+                          ),
                       ],
                     ),
-                  ],
-                  const SizedBox(height: 32),
-                  if (_isDikirim) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed: _openCamera,
-                        icon: const Icon(Icons.camera_alt_outlined),
-                        label: const Text(
-                          'Ambil Foto Bukti Pengiriman',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Text(
-                        'Foto akan disertai watermark GPS & waktu otomatis',
-                        style: TextStyle(fontSize: 12, color: colorScheme.outline),
-                      ),
-                    ),
-                  ],
-                  if (_isDiterima) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: const Row(
+                    if (_isDiterima && _expedition.penerima != null) ...[
+                      const SizedBox(height: 12),
+                      _InfoCard(
+                        title: 'Bukti Pengiriman',
+                        icon: Icons.verified_outlined,
                         children: [
-                          Icon(Icons.check_circle, color: Colors.green),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Surat telah diterima dan data sudah tersinkronisasi ke server.',
-                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                          _InfoRow('Nama Penerima', _expedition.penerima!),
+                          if (_expedition.lat != null && _expedition.lng != null)
+                            _InfoRow(
+                              'Koordinat GPS',
+                              '${_expedition.lat!.toStringAsFixed(6)}, ${_expedition.lng!.toStringAsFixed(6)}',
                             ),
-                          ),
                         ],
                       ),
-                    ),
+                    ],
+                    const SizedBox(height: 32),
+                    if (_isDikirim) ...[
+                      const Text(
+                        'Nama Penerima Surat',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _penerimaCtrl,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Masukkan Nama Penerima',
+                          hintText: 'Contoh: Budi Santoso',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                          helperText:
+                              'Isi nama penerima untuk mengaktifkan tombol kamera',
+                        ),
+                        validator: (val) => (val == null || val.trim().isEmpty)
+                            ? 'Nama penerima wajib diisi'
+                            : null,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed: _canTakePhoto ? _openCamera : null,
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: const Text(
+                            'Ambil Foto Bukti Pengiriman',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _canTakePhoto
+                                ? colorScheme.primary
+                                : Colors.grey,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          'Foto akan disertai watermark: Nama Penerima, GPS & Waktu',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.outline,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                    if (_isDiterima) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.green),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Surat telah diterima dan data sudah tersinkronisasi ke server.',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
     );
@@ -290,9 +320,21 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon, label) = switch (status) {
-      ExpeditionStatus.dikirim => (Colors.orange, Icons.local_shipping_outlined, 'Sedang Dikirim'),
-      ExpeditionStatus.diterima => (Colors.green, Icons.check_circle_outline, 'Sudah Diterima'),
-      _ => (Theme.of(context).colorScheme.primary, Icons.inbox_outlined, 'Tersedia'),
+      ExpeditionStatus.dikirim => (
+          Colors.orange,
+          Icons.local_shipping_outlined,
+          'Sedang Dikirim'
+        ),
+      ExpeditionStatus.diterima => (
+          Colors.green,
+          Icons.check_circle_outline,
+          'Sudah Diterima'
+        ),
+      _ => (
+          Theme.of(context).colorScheme.primary,
+          Icons.inbox_outlined,
+          'Tersedia'
+        ),
     };
 
     return Container(
@@ -326,7 +368,11 @@ class _InfoCard extends StatelessWidget {
   final IconData icon;
   final List<Widget> children;
 
-  const _InfoCard({required this.title, required this.icon, required this.children});
+  const _InfoCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -343,10 +389,12 @@ class _InfoCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+                Icon(icon,
+                    size: 18, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14)),
               ],
             ),
             const Divider(height: 20),

@@ -12,6 +12,7 @@ class ImageWatermarkUtil {
     required double latitude,
     required double longitude,
     required String address,
+    required String namaPenerima,
   }) async {
     final bytes = await File(imagePath).readAsBytes();
 
@@ -22,10 +23,10 @@ class ImageWatermarkUtil {
     }
 
     final timeStr = DateTime.now().toLocal().toString().substring(0, 19);
-    final text = 'Surat: $nomorSurat\nGPS: $latitude, $longitude\nAlamat: $address\nWaktu: $timeStr';
+    final text = 'Surat: $nomorSurat\nDiterima: $namaPenerima\nGPS: $latitude, $longitude\nAlamat: $address\nWaktu: $timeStr';
 
     // Buat latar hitam semi transparan di bagian bawah agar teks watermark mudah dibaca
-    final rectHeight = (image.height * 0.15).round().clamp(100, 200);
+    final rectHeight = (image.height * 0.18).round().clamp(120, 240);
     final rectY = image.height - rectHeight;
 
     img.fillRect(
