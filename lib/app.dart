@@ -40,27 +40,27 @@ class EkspedisiSuratApp extends StatelessWidget {
           ),
           iconTheme: IconThemeData(color: Colors.white),
         ),
-        cardTheme: CardTheme(
+        cardTheme: const CardTheme(
           elevation: 0,
           color: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(const Radius.circular(12)),
-            side: const BorderSide(color: Color(0xFFE0E0E0)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            side: BorderSide(color: Color(0xFFE0E0E0)),
           ),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(const Radius.circular(10)),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
           ),
           filled: true,
-          fillColor: const Color(0xFFF5F7FA),
+          fillColor: Color(0xFFF5F7FA),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: _primary,
             foregroundColor: Colors.white,
             shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(const Radius.circular(10)),
+              borderRadius: BorderRadius.all(Radius.circular(10)),
             ),
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
