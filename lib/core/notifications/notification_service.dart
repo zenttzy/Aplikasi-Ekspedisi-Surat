@@ -56,8 +56,8 @@ class NotificationService {
         notification.hashCode,
         notification.title,
         notification.body,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
+        const NotificationDetails(
+          android: const AndroidNotificationDetails(
             _channelId,
             _channelName,
             channelDescription: 'Notifikasi surat ekspedisi masuk',
