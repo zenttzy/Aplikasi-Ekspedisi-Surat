@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../../core/notifications/notification_service.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/config/app_constants.dart';
@@ -39,6 +40,8 @@ class AuthRepository {
       if (user != null) {
         await _storage.saveUserData(user);
       }
+      // Register FCM device token for push notifications
+      _registerFcmToken(token);
       return const AuthResult.ok();
     } on DioException catch (e) {
       final msg = e.response?.data is Map
@@ -88,5 +91,17 @@ class AuthRepository {
 
   Future<void> logout() async {
     await _storage.clearAll();
+  }
+
+  Future<void> _registerFcmToken(String authToken) async {
+    try {
+      final fcmToken = await NotificationService().getToken();
+      if (fcmToken == null) return;
+      await _dio.post(
+        '/users/device-token',
+        data: {'token': fcmToken, 'platform': 'android'},
+        options: Options(headers: {'Authorization': 'Bearer $authToken'}),
+      );
+    } catch (_) {}
   }
 }
