@@ -2,7 +2,7 @@ class AppConstants {
   AppConstants._();
 
   static const String dbName = 'ekspedisi_surat.db';
-  static const int dbVersion = 1;
+  static const int dbVersion = 2;
   static const String tableExpeditions = 'expeditions';
 
   // REST API endpoints

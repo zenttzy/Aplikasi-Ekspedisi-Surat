@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 
 import '../../core/config/app_constants.dart';
 import '../../core/di/service_locator.dart';
+import '../../core/sync/sync_manager.dart';
+import '../account/account_page.dart';
+import '../activity/activity_page.dart';
 import '../auth/data/auth_repository.dart';
 import '../auth/presentation/login_page.dart';
 import '../dashboard/dashboard_page.dart';
-import '../expeditions/data/api_surat_repository.dart';
 import '../expeditions/data/expedition_model.dart';
+import '../expeditions/data/expedition_repository.dart';
 import '../expeditions/presentation/surat_detail_page.dart';
+import '../history/history_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isConfigured;
@@ -22,388 +26,391 @@ class _HomePageState extends State<HomePage> {
   List<Expedition> _suratList = [];
   bool _loading = true;
   String? _error;
-  String? _kurirNama;
-  String? _kurirEmail;
-
-  // Track surat IDs seen before last refresh for badge counting
-  Set<String> _seenUuids = {};
-  int _newSuratCount = 0;
-
-  Timer? _pollTimer;
+  String _courierName = 'Kurir';
+  String _courierEmail = '';
+  int _selectedIndex = 0;
+  int _newTaskCount = 0;
+  Set<String> _knownUuids = {};
+  SyncState _syncState = const SyncState(
+    isOnline: false,
+    isSyncing: false,
+    pendingCount: 0,
+  );
+  StreamSubscription<SyncState>? _syncSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadData(initial: true);
-    // Poll every 30s for new surat
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadData());
+    _initializeOfflineFirst();
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _syncSubscription?.cancel();
     super.dispose();
   }
 
-  Future<void> _loadData({bool initial = false}) async {
-    if (initial) setState(() { _loading = true; _error = null; });
-    try {
-      final user = await sl<AuthRepository>().getCurrentUser();
-      _kurirNama = user?['nama_lengkap'] as String? ?? 'Kurir';
-      _kurirEmail = user?['email'] as String? ?? '';
-      final list = await sl<ApiSuratRepository>().fetchSurat();
-
-      if (mounted) {
-        setState(() {
-          if (!initial && _seenUuids.isNotEmpty) {
-            final incoming = list.where((s) => !_seenUuids.contains(s.uuid)).toList();
-            _newSuratCount = incoming.length;
-          }
-          _suratList = list;
-          _seenUuids = list.map((s) => s.uuid).toSet();
-          _loading = false;
-        });
+  Future<void> _initializeOfflineFirst() async {
+    final syncManager = sl<SyncManager>();
+    _syncSubscription = syncManager.states.listen((state) async {
+      if (!mounted) return;
+      setState(() => _syncState = state);
+      await _loadLocalData();
+      if (state.error != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(state.error!)),
+        );
       }
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    });
+
+    final user = await sl<AuthRepository>().getCurrentUser();
+    if (mounted) {
+      setState(() {
+        _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
+        _courierEmail = user?['email'] as String? ?? '';
+      });
+    }
+
+    await _loadLocalData(initial: true);
+    await syncManager.start();
+  }
+
+  Future<void> _loadLocalData({bool initial = false}) async {
+    if (initial && mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final list = await sl<ExpeditionRepository>().getAll();
+      if (!mounted) return;
+      final incoming = _knownUuids.isEmpty
+          ? <Expedition>[]
+          : list.where((item) => !_knownUuids.contains(item.uuid)).toList();
+      setState(() {
+        _suratList = list;
+        _knownUuids = list.map((item) => item.uuid).toSet();
+        _newTaskCount += incoming
+            .where((item) => item.status == ExpeditionStatus.draft)
+            .length;
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = error.toString();
+      });
     }
   }
 
-  void _clearBadge() {
-    if (_newSuratCount > 0) setState(() => _newSuratCount = 0);
+  Future<void> _refresh() async {
+    await sl<SyncManager>().syncAll();
+    await _loadLocalData();
   }
 
-  Future<void> _ambilSurat(Expedition surat) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _takeSurat(Expedition surat) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Ambil Surat'),
-        content: Text('Ambil dan kirimkan surat "${surat.nomorSurat ?? surat.perihal}"?'),
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.delivery_dining_outlined),
+        title: const Text('Ambil tugas pengiriman?'),
+        content: Text(
+          'Surat ${surat.nomorSurat ?? surat.perihal} akan disimpan sebagai tugas Anda, termasuk saat offline.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Batal')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Ambil')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ambil tugas'),
+          ),
         ],
       ),
     );
-    if (confirm != true || !mounted) return;
+    if (confirmed != true || !mounted) return;
+
     try {
-      final ok = await sl<ApiSuratRepository>().ambilSurat(surat.uuid);
-      if (ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Surat berhasil diambil, silakan antar!'),
-            backgroundColor: Colors.green,
+      final result = await sl<SyncManager>().takeSurat(surat);
+      await _loadLocalData();
+      if (!mounted) return;
+      setState(() => _selectedIndex = 1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.synced
+                ? 'Tugas berhasil diambil dan tersinkron.'
+                : 'Tugas disimpan offline dan akan tersinkron otomatis.',
           ),
-        );
-        _loadData();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _openDetail(Expedition surat) async {
-    final refreshed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => SuratDetailPage(expedition: surat)),
-    );
-    if (refreshed == true) _loadData();
-  }
-
-  Future<void> _logout() async {
-    await sl<AuthRepository>().logout();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => LoginPage(isConfigured: widget.isConfigured)),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengambil tugas: $error')),
       );
     }
   }
 
-  // Surat that kurir should see in sidebar: draft (tersedia) + dikirim
-  List<Expedition> get _tugasList =>
-      _suratList.where((s) => s.status != ExpeditionStatus.diterima).toList();
+  Future<void> _openDetail(Expedition surat) async {
+    final latest = await sl<ExpeditionRepository>().getByUuid(surat.uuid) ?? surat;
+    if (!mounted) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => SuratDetailPage(expedition: latest),
+      ),
+    );
+    if (changed == true) await _loadLocalData();
+  }
 
-  List<Expedition> get _draftList =>
-      _suratList.where((s) => s.status == ExpeditionStatus.draft).toList();
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: _syncState.pendingCount > 0
+            ? Text(
+                '${_syncState.pendingCount} perubahan masih pending. Sebaiknya tunggu tersinkron sebelum keluar.',
+              )
+            : const Text('Anda perlu login kembali untuk menerima tugas.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
 
-  List<Expedition> get _dikirimList =>
-      _suratList.where((s) => s.status == ExpeditionStatus.dikirim).toList();
+    await sl<AuthRepository>().logout();
+    await sl<ExpeditionRepository>().clear();
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => LoginPage(isConfigured: widget.isConfigured),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final pages = [
+      DashboardPage(
+        courierName: _courierName,
+        suratList: _suratList,
+        onRefresh: _refresh,
+        onTake: _takeSurat,
+        onOpen: _openDetail,
+        onViewActivities: () => setState(() {
+          _selectedIndex = 1;
+          _newTaskCount = 0;
+        }),
+      ),
+      ActivityPage(
+        suratList: _suratList,
+        onRefresh: _refresh,
+        onTake: _takeSurat,
+        onOpen: _openDetail,
+      ),
+      HistoryPage(
+        suratList: _suratList,
+        onRefresh: _refresh,
+        onOpen: _openDetail,
+      ),
+      AccountPage(
+        name: _courierName,
+        email: _courierEmail,
+        isOnline: _syncState.isOnline,
+        isSyncing: _syncState.isSyncing,
+        pendingCount: _syncState.pendingCount,
+        onSync: _refresh,
+        onLogout: _logout,
+      ),
+    ];
 
     return Scaffold(
-      backgroundColor: Colors.white.withOpacity(0.3),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Ekspedisi Surat'),
-        backgroundColor: colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.mail_outline, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text('Ekspedisi Surat'),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadData(initial: true),
-          ),
-        ],
-      ),
-      drawer: _buildDrawer(context, colorScheme),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError()
-              : const DashboardPage(),
-    );
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.cloud_off_outlined, size: 48, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text('Gagal memuat data', style: TextStyle(color: Colors.grey.shade700)),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: () => _loadData(initial: true),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Coba Lagi'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawer(BuildContext context, ColorScheme colorScheme) {
-    return Drawer(
-      child: Column(
-        children: [
-          // Drawer header
-          DrawerHeader(
-            decoration: BoxDecoration(color: colorScheme.primary),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: Colors.white24,
-                  child: Text(
-                    (_kurirNama?.isNotEmpty == true)
-                        ? _kurirNama![0].toUpperCase()
-                        : 'K',
-                    style: const TextStyle(
-                        fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _kurirNama ?? 'Kurir',
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  _kurirEmail ?? '',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-
-          // Section: Tugas Saya
-          _buildSectionHeader(
-            context,
-            'Tugas Saya',
-            trailing: _newSuratCount > 0
-                ? GestureDetector(
-                    onTap: _clearBadge,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$_newSuratCount baru',
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
-                      ),
+            tooltip: 'Sinkronkan',
+            onPressed: _syncState.isSyncing ? null : _refresh,
+            icon: _syncState.isSyncing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
                   )
-                : null,
+                : const Icon(Icons.sync),
           ),
-
-          if (_tugasList.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text('Tidak ada tugas aktif',
-                  style: TextStyle(color: Colors.grey, fontSize: 13)),
-            )
-          else
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  if (_draftList.isNotEmpty) ...[
-                    _buildSubSectionLabel('Tersedia (${_draftList.length})'),
-                    ..._draftList.map((s) => _buildSuratTile(context, s, colorScheme)),
-                  ],
-                  if (_dikirimList.isNotEmpty) ...[
-                    _buildSubSectionLabel('Sedang Dikirim (${_dikirimList.length})'),
-                    ..._dikirimList.map((s) => _buildSuratTile(context, s, colorScheme)),
-                  ],
-                ],
-              ),
-            ),
-
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Keluar', style: TextStyle(color: Colors.red)),
-            onTap: _logout,
-          ),
-          const SizedBox(height: 8),
         ],
       ),
-    );
-  }
-
-  Widget _buildSectionHeader(BuildContext context, String title, {Widget? trailing}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
+      body: Column(
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade600,
-                  letterSpacing: 0.5)),
-          const Spacer(),
-          if (trailing != null) trailing,
+          _SyncBanner(state: _syncState),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _ErrorView(error: _error!, onRetry: _loadLocalData)
+                    : IndexedStack(index: _selectedIndex, children: pages),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSubSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _buildSuratTile(
-      BuildContext context, Expedition surat, ColorScheme colorScheme) {
-    final isDraft = surat.status == ExpeditionStatus.draft;
-    final statusColor = isDraft ? colorScheme.primary : Colors.orange.shade600;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: statusColor.withOpacity(0.3)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          Navigator.pop(context); // close drawer
-          _openDetail(surat);
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _selectedIndex = index;
+            if (index == 1) _newTaskCount = 0;
+          });
         },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      isDraft ? 'Tersedia' : 'Dikirim',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: statusColor),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (isDraft)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        _ambilSurat(surat);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('Ambil',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                surat.nomorSurat ?? surat.perihal,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                surat.perihal,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      surat.divisiTujuan.isEmpty ? '-' : surat.divisiTujuan,
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
           ),
-        ),
+          NavigationDestination(
+            icon: _newTaskCount > 0
+                ? Badge(
+                    label: Text('$_newTaskCount'),
+                    child: const Icon(Icons.route_outlined),
+                  )
+                : const Icon(Icons.route_outlined),
+            selectedIcon: const Icon(Icons.route),
+            label: 'Aktivitas',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Riwayat',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Akun',
+          ),
+        ],
       ),
     );
   }
 }
 
+class _SyncBanner extends StatelessWidget {
+  final SyncState state;
+
+  const _SyncBanner({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.isOnline && !state.isSyncing && state.pendingCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    final color = !state.isOnline
+        ? const Color(0xFFF59E0B)
+        : state.pendingCount > 0
+            ? Theme.of(context).colorScheme.primary
+            : const Color(0xFF0284C7);
+    final icon = !state.isOnline
+        ? Icons.cloud_off_outlined
+        : state.isSyncing
+            ? Icons.sync
+            : Icons.cloud_upload_outlined;
+    final text = !state.isOnline
+        ? 'Mode offline • ${state.pendingCount} perubahan menunggu sinkronisasi'
+        : state.isSyncing
+            ? 'Menyinkronkan data dengan server...'
+            : '${state.pendingCount} perubahan menunggu sinkronisasi';
+
+    return Container(
+      width: double.infinity,
+      color: color.withOpacity(0.12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+
+  const _ErrorView({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.storage_outlined, size: 52),
+            const SizedBox(height: 14),
+            const Text(
+              'Data lokal belum dapat dibuka',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

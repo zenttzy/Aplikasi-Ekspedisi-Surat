@@ -56,6 +56,7 @@ class ApiSuratRepository {
     required double lat,
     required double lng,
     required String namaPenerima,
+    String? fotoHash,
   }) async {
     final formData = FormData.fromMap({
       'foto': await MultipartFile.fromFile(
@@ -65,6 +66,7 @@ class ApiSuratRepository {
       'lat': lat.toString(),
       'long': lng.toString(),
       'nama_penerima': namaPenerima,
+      if (fotoHash != null) 'foto_hash': fotoHash,
     });
 
     await _dio.post(

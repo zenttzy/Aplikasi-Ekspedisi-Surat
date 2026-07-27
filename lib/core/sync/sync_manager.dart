@@ -1,166 +1,215 @@
-import 'dart:convert';
-import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:io';
 
-import '../../core/config/app_constants.dart';
+import '../network/connectivity_service.dart';
+import '../network/secure_storage_service.dart';
+import '../../features/expeditions/data/api_surat_repository.dart';
 import '../../features/expeditions/data/expedition_model.dart';
 import '../../features/expeditions/data/expedition_repository.dart';
 import 'sync_prefs.dart';
 
-/// Hasil satu siklus sinkronisasi (untuk ditampilkan/di-log di UI).
-class SyncResult {
-  final int downloaded;
-  final int uploaded;
-  final int failed;
+class SyncState {
+  final bool isOnline;
+  final bool isSyncing;
+  final int pendingCount;
+  final String? lastSyncAt;
   final String? error;
 
-  const SyncResult({
-    this.downloaded = 0,
-    this.uploaded = 0,
-    this.failed = 0,
+  const SyncState({
+    required this.isOnline,
+    required this.isSyncing,
+    required this.pendingCount,
+    this.lastSyncAt,
     this.error,
   });
-
-  bool get isSuccess => error == null;
 }
 
-/// Mengelola sinkronisasi dua arah antara SQLite lokal dan server.
-///
-/// - Download: tarik surat baru dari server, upsert ke SQLite.
-/// - Upload: dorong bukti foto + metadata surat yang `needsUpload`.
-///
-/// Catatan: layer transport (Dio) di-inject agar mudah di-test dan
-/// di-stub saat Edge Functions belum siap.
+class OfflineActionResult {
+  final bool synced;
+  final bool queued;
+
+  const OfflineActionResult({
+    required this.synced,
+    required this.queued,
+  });
+}
+
 class SyncManager {
-  final Dio _dio;
+  final ApiSuratRepository _api;
   final ExpeditionRepository _repository;
+  final ConnectivityService _connectivity;
+  final SecureStorageService _storage;
   final SyncPrefs _prefs;
 
+  final _stateController = StreamController<SyncState>.broadcast();
+  StreamSubscription<bool>? _connectivitySubscription;
+  Timer? _retryTimer;
+  bool _syncing = false;
+  bool _started = false;
+  bool _online = false;
+
   SyncManager({
-    required Dio dio,
+    required ApiSuratRepository api,
     required ExpeditionRepository repository,
+    required ConnectivityService connectivity,
+    required SecureStorageService storage,
     required SyncPrefs prefs,
-  })  : _dio = dio,
+  })  : _api = api,
         _repository = repository,
+        _connectivity = connectivity,
+        _storage = storage,
         _prefs = prefs;
 
-  /// Tarik data baru dari Supabase REST API dan upsert ke SQLite.
-  Future<int> download() async {
-    // Membangun URL REST API Supabase secara absolut agar mengabaikan baseUrl Edge Function
-    final String restUrl = '${_dio.options.baseUrl.replaceFirst('/functions/v1', '/rest/v1')}/surat_ekspedisi';
+  Stream<SyncState> get states => _stateController.stream;
 
-    final res = await _dio.get(
-      restUrl,
-      queryParameters: {
-        'select': 'uuid,nomor_surat,perihal,status,tanggal_penerimaan,nama_penerima,kurir_id,divisi_pengirim:divisi_pengirim_id(nama_divisi),divisi_tujuan:divisi_tujuan_id(nama_divisi)',
-      },
-    );
-
-    final rawList = res.data as List;
-    final items = rawList
-        .map((e) => Expedition.fromServerJson(e as Map<String, dynamic>))
-        .toList();
-
-    await _repository.upsertAll(items);
-
-    // Tandai waktu sinkronisasi terakhir
-    await _prefs.setLastSyncAt(DateTime.now().toUtc().toIso8601String());
-    return items.length;
-  }
-
-  /// Unggah semua surat yang `needsUpload` (bukti foto + metadata).
-  Future<({int uploaded, int failed})> upload() async {
-    final pending = await _repository.getPendingUpload();
-    var uploaded = 0;
-    var failed = 0;
-
-    for (final exp in pending) {
-      try {
-        await _uploadOne(exp);
-        await _repository.markSynced(exp.uuid);
-        uploaded++;
-      } catch (_) {
-        failed++;
-      }
-    }
-    return (uploaded: uploaded, failed: failed);
-  }
-
-  Future<void> _uploadOne(Expedition exp) async {
-    // Sesuai API contract: multipart/form-data ke Edge Function /functions/v1/sync-proof.
-    // surat_id dikirim sebagai field form data.
-    final formData = FormData.fromMap({
-      'surat_id': exp.uuid,
-      if (exp.fotoPath != null)
-        'file': await MultipartFile.fromFile(exp.fotoPath!),
-      'penerima': exp.penerima,
-      'tanggal_diterima': exp.tanggalDiterima,
-      'lat': exp.lat,
-      'lon': exp.lng,
-      'hash': exp.fotoHash,
+  Future<void> start() async {
+    if (_started) return;
+    _started = true;
+    _online = await _connectivity.isConnected;
+    await _emitState();
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen((isOnline) async {
+      _online = isOnline;
+      await _emitState();
+      if (isOnline) await syncAll();
     });
+    _retryTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
+      if (_online && await _repository.getPendingCount() > 0) {
+        await syncAll();
+      }
+    });
+    if (_online) await syncAll();
+  }
 
-    await _dio.post(
-      "${AppConstants.epSurat}/${exp.uuid}/bukti",
-      data: formData,
+  Future<List<Expedition>> loadLocal() => _repository.getAll();
+
+  Future<OfflineActionResult> takeSurat(Expedition expedition) async {
+    final user = await _storage.getUserData();
+    final courierId = user?['id'] as String?;
+    if (courierId == null || courierId.isEmpty) {
+      throw StateError('Data kurir tidak ditemukan. Silakan login ulang.');
+    }
+
+    await _repository.queueTake(
+      expedition: expedition,
+      courierId: courierId,
+    );
+    await _emitState();
+
+    if (!_online) {
+      return const OfflineActionResult(synced: false, queued: true);
+    }
+
+    await syncAll();
+    final refreshed = await _repository.getByUuid(expedition.uuid);
+    return OfflineActionResult(
+      synced: refreshed?.pendingTake == false,
+      queued: refreshed?.pendingTake == true,
     );
   }
 
-  String _getUserIdFromToken(String token) {
+  Future<OfflineActionResult> saveProof({
+    required Expedition expedition,
+    required String recipient,
+    required String photoPath,
+    required String photoHash,
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    await _repository.queueProof(
+      expedition: expedition,
+      recipient: recipient,
+      photoPath: photoPath,
+      photoHash: photoHash,
+      latitude: latitude,
+      longitude: longitude,
+      address: address,
+    );
+    await _emitState();
+
+    if (!_online) {
+      return const OfflineActionResult(synced: false, queued: true);
+    }
+
+    await syncAll();
+    final refreshed = await _repository.getByUuid(expedition.uuid);
+    return OfflineActionResult(
+      synced: refreshed?.needsUpload == false,
+      queued: refreshed?.needsUpload == true,
+    );
+  }
+
+  Future<void> syncAll() async {
+    if (_syncing || !_online) return;
+    _syncing = true;
+    await _emitState();
+
+    String? error;
     try {
-      final parts = token.split('.');
-      if (parts.length != 3) return '';
-      String payload = parts[1];
-      String normalized = base64Url.normalize(payload);
-      String resp = utf8.decode(base64Url.decode(normalized));
-      return jsonDecode(resp)['sub'] ?? '';
-    } catch (_) {
-      return '';
+      final pendingTake = await _repository.getPendingTake();
+      for (final expedition in pendingTake) {
+        try {
+          final success = await _api.ambilSurat(expedition.uuid);
+          if (!success) {
+            throw StateError('Data kurir tidak tersedia.');
+          }
+          await _repository.markTakeSynced(expedition.uuid);
+        } catch (exception) {
+          error = 'Sebagian klaim surat belum tersinkron.';
+        }
+      }
+
+      final pendingProof = await _repository.getPendingUpload();
+      for (final expedition in pendingProof) {
+        final photoPath = expedition.fotoPath;
+        if (photoPath == null || !await File(photoPath).exists()) {
+          error = 'File foto untuk ${expedition.nomorSurat ?? expedition.uuid} tidak ditemukan.';
+          continue;
+        }
+        try {
+          await _api.uploadBukti(
+            uuid: expedition.uuid,
+            foto: File(photoPath),
+            lat: expedition.lat ?? 0,
+            lng: expedition.lng ?? 0,
+            namaPenerima: expedition.penerima ?? '',
+            fotoHash: expedition.fotoHash,
+          );
+          await _repository.markProofSynced(expedition.uuid);
+        } catch (exception) {
+          error = 'Sebagian bukti pengiriman belum tersinkron.';
+        }
+      }
+
+      final serverItems = await _api.fetchSurat();
+      await _repository.upsertFromServer(serverItems);
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _prefs.setLastSyncAt(now);
+    } catch (exception) {
+      error = 'Sinkronisasi tertunda. Akan dicoba kembali saat koneksi stabil.';
+    } finally {
+      _syncing = false;
+      await _emitState(error: error);
     }
   }
 
-  /// Klaim surat yang berstatus draft menjadi tugas kurir (dikirim).
-  Future<bool> takeSurat(String uuid) async {
-    try {
-      // Get auth token from interceptor or storage
-      final authHeader = _dio.options.headers['Authorization'] ?? '';
-      final token = authHeader.toString().replaceFirst('Bearer ', '');
-      final myUid = _getUserIdFromToken(token);
-
-      if (myUid.isEmpty) return false;
-
-      final String restUrl = '${_dio.options.baseUrl.replaceFirst('/functions/v1', '/rest/v1')}/surat_ekspedisi';
-      
-      await _dio.patch(
-        '$restUrl?uuid=eq.$uuid',
-        data: {
-          'status': 'dikirim',
-          'kurir_id': myUid,
-        },
-      );
-      
-      // Update local db
-      await _repository.updateStatusAndKurir(uuid, 'dikirim', myUid);
-      // SyncManager is usually followed by UI refresh
-      return true;
-    } catch (e) {
-      return false;
-    }
+  Future<void> _emitState({String? error}) async {
+    if (_stateController.isClosed) return;
+    _stateController.add(
+      SyncState(
+        isOnline: _online,
+        isSyncing: _syncing,
+        pendingCount: await _repository.getPendingCount(),
+        lastSyncAt: await _prefs.getLastSyncAt(),
+        error: error,
+      ),
+    );
   }
 
-  /// Siklus penuh: download lalu upload.
-  Future<SyncResult> syncAll() async {
-    try {
-      final downloaded = await download();
-      final up = await upload();
-      return SyncResult(
-        downloaded: downloaded,
-        uploaded: up.uploaded,
-        failed: up.failed,
-      );
-    } on DioException catch (e) {
-      return SyncResult(error: e.message ?? 'Gagal sinkronisasi');
-    } catch (e) {
-      return SyncResult(error: e.toString());
-    }
+  Future<void> dispose() async {
+    _retryTimer?.cancel();
+    await _connectivitySubscription?.cancel();
+    await _stateController.close();
   }
 }

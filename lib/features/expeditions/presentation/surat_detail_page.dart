@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/config/app_constants.dart';
 import '../../../core/di/service_locator.dart';
-import '../data/api_surat_repository.dart';
+import '../../../core/sync/sync_manager.dart';
 import '../data/expedition_model.dart';
 import 'camera_capture_page.dart';
 
@@ -65,8 +65,10 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     if (result == null || !mounted) return;
 
     final String? fotoPath = result['foto_path'] as String?;
-    final double? lat = result['latitude'] as double?;
-    final double? lng = result['longitude'] as double?;
+    final double? lat = (result['latitude'] as num?)?.toDouble();
+    final double? lng = (result['longitude'] as num?)?.toDouble();
+    final String fotoHash = (result['foto_hash'] as String?) ?? '';
+    final String address = (result['alamat'] as String?) ?? '';
 
     if (fotoPath == null || fotoPath.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,29 +94,38 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
 
     setState(() => _uploading = true);
     try {
-      await sl<ApiSuratRepository>().uploadBukti(
-        uuid: _expedition.uuid,
-        foto: foto,
-        lat: lat ?? 0.0,
-        lng: lng ?? 0.0,
-        namaPenerima: namaPenerima,
+      final syncResult = await sl<SyncManager>().saveProof(
+        expedition: _expedition,
+        recipient: namaPenerima,
+        photoPath: fotoPath,
+        photoHash: fotoHash,
+        latitude: lat ?? 0.0,
+        longitude: lng ?? 0.0,
+        address: address,
       );
       setState(() {
         _expedition = _expedition.copyWith(
           status: ExpeditionStatus.diterima,
           penerima: namaPenerima,
-          isSynced: true,
+          fotoPath: fotoPath,
+          fotoHash: fotoHash,
+          lat: lat ?? 0.0,
+          lng: lng ?? 0.0,
+          alamat: address,
+          isSynced: syncResult.synced,
+          needsUpload: !syncResult.synced,
         );
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Surat berhasil dikirim & disinkronkan!'),
-            ]),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(
+              syncResult.synced
+                  ? 'Bukti berhasil disimpan dan tersinkron.'
+                  : 'Bukti tersimpan offline dan akan tersinkron otomatis.',
+            ),
+            backgroundColor:
+                syncResult.synced ? Colors.green : Colors.orange.shade800,
           ),
         );
         Navigator.of(context).pop(true);
@@ -164,7 +175,7 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Mengupload bukti pengiriman...'),
+                  Text('Menyimpan bukti pengiriman...'),
                 ],
               ),
             )
@@ -176,6 +187,11 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _StatusBanner(status: _expedition.status),
+                    if (_expedition.pendingTake ||
+                        _expedition.needsUpload) ...[
+                      const SizedBox(height: 12),
+                      const _PendingSyncBanner(),
+                    ],
                     const SizedBox(height: 16),
                     _InfoCard(
                       title: 'Informasi Surat',
@@ -309,6 +325,38 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _PendingSyncBanner extends StatelessWidget {
+  const _PendingSyncBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.cloud_upload_outlined, color: Color(0xFFC2410C)),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Perubahan tersimpan di perangkat dan menunggu koneksi internet.',
+              style: TextStyle(
+                color: Color(0xFF9A3412),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

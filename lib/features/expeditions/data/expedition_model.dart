@@ -10,6 +10,7 @@ class Expedition extends Equatable {
   final String divisiTujuan;
   final String? penerima;
   final String? tanggalDiterima;
+  final String? createdAt;
   final String? fotoPath;
   final String? fotoHash;
   final double? lat;
@@ -19,6 +20,7 @@ class Expedition extends Equatable {
   final String? kurirId;
   final bool isSynced;
   final bool needsUpload;
+  final bool pendingTake;
 
   const Expedition({
     required this.uuid,
@@ -28,6 +30,7 @@ class Expedition extends Equatable {
     required this.divisiTujuan,
     this.penerima,
     this.tanggalDiterima,
+    this.createdAt,
     this.fotoPath,
     this.fotoHash,
     this.lat,
@@ -37,9 +40,10 @@ class Expedition extends Equatable {
     this.kurirId,
     required this.isSynced,
     required this.needsUpload,
+    this.pendingTake = false,
   });
 
-  static Expedition fromServerJson(Map<String, dynamic> json) {
+  factory Expedition.fromServerJson(Map<String, dynamic> json) {
     return Expedition(
       uuid: (json['uuid'] ?? json['id']) as String,
       nomorSurat: json['nomor_surat'] as String?,
@@ -48,10 +52,12 @@ class Expedition extends Equatable {
       divisiTujuan: (json['tujuan_nama'] as String?) ?? '',
       penerima: json['nama_penerima'] as String?,
       tanggalDiterima: json['tanggal_terima'] as String?,
-      status: (json['status'] as String?) ?? ExpeditionStatus.dikirim,
+      createdAt: json['created_at'] as String?,
+      status: (json['status'] as String?) ?? ExpeditionStatus.draft,
       kurirId: json['kurir_id'] as String?,
       isSynced: true,
       needsUpload: false,
+      pendingTake: false,
     );
   }
 
@@ -64,15 +70,17 @@ class Expedition extends Equatable {
       divisiTujuan: (row['divisi_tujuan'] as String?) ?? '',
       penerima: row['penerima'] as String?,
       tanggalDiterima: row['tanggal_diterima'] as String?,
+      createdAt: row['created_at'] as String?,
       fotoPath: row['foto_path'] as String?,
       fotoHash: row['foto_hash'] as String?,
-      lat: row['lat'] as double?,
-      lng: row['long'] as double?,
+      lat: (row['lat'] as num?)?.toDouble(),
+      lng: (row['long'] as num?)?.toDouble(),
       alamat: row['alamat'] as String?,
-      status: (row['status'] as String?) ?? ExpeditionStatus.dikirim,
+      status: (row['status'] as String?) ?? ExpeditionStatus.draft,
       kurirId: row['kurir_id'] as String?,
-      isSynced: (row['is_synced'] as int) == 1,
-      needsUpload: (row['needs_upload'] as int) == 1,
+      isSynced: (row['is_synced'] as int? ?? 0) == 1,
+      needsUpload: (row['needs_upload'] as int? ?? 0) == 1,
+      pendingTake: (row['pending_take'] as int? ?? 0) == 1,
     );
   }
 
@@ -84,6 +92,7 @@ class Expedition extends Equatable {
         'divisi_tujuan': divisiTujuan,
         'penerima': penerima,
         'tanggal_diterima': tanggalDiterima,
+        'created_at': createdAt,
         'foto_path': fotoPath,
         'foto_hash': fotoHash,
         'lat': lat,
@@ -93,43 +102,65 @@ class Expedition extends Equatable {
         'kurir_id': kurirId,
         'is_synced': isSynced ? 1 : 0,
         'needs_upload': needsUpload ? 1 : 0,
+        'pending_take': pendingTake ? 1 : 0,
       };
 
   Expedition copyWith({
     String? status,
     String? penerima,
     String? tanggalDiterima,
+    String? createdAt,
     String? fotoPath,
     String? fotoHash,
     double? lat,
     double? lng,
     String? alamat,
+    String? kurirId,
     bool? isSynced,
     bool? needsUpload,
-  }) =>
-      Expedition(
-        uuid: uuid,
-        nomorSurat: nomorSurat,
-        perihal: perihal,
-        divisiPengirim: divisiPengirim,
-        divisiTujuan: divisiTujuan,
-        penerima: penerima ?? this.penerima,
-        tanggalDiterima: tanggalDiterima ?? this.tanggalDiterima,
-        fotoPath: fotoPath ?? this.fotoPath,
-        fotoHash: fotoHash ?? this.fotoHash,
-        lat: lat ?? this.lat,
-        lng: lng ?? this.lng,
-        alamat: alamat ?? this.alamat,
-        status: status ?? this.status,
-        kurirId: kurirId,
-        isSynced: isSynced ?? this.isSynced,
-        needsUpload: needsUpload ?? this.needsUpload,
-      );
+    bool? pendingTake,
+  }) {
+    return Expedition(
+      uuid: uuid,
+      nomorSurat: nomorSurat,
+      perihal: perihal,
+      divisiPengirim: divisiPengirim,
+      divisiTujuan: divisiTujuan,
+      penerima: penerima ?? this.penerima,
+      tanggalDiterima: tanggalDiterima ?? this.tanggalDiterima,
+      createdAt: createdAt ?? this.createdAt,
+      fotoPath: fotoPath ?? this.fotoPath,
+      fotoHash: fotoHash ?? this.fotoHash,
+      lat: lat ?? this.lat,
+      lng: lng ?? this.lng,
+      alamat: alamat ?? this.alamat,
+      status: status ?? this.status,
+      kurirId: kurirId ?? this.kurirId,
+      isSynced: isSynced ?? this.isSynced,
+      needsUpload: needsUpload ?? this.needsUpload,
+      pendingTake: pendingTake ?? this.pendingTake,
+    );
+  }
 
   @override
   List<Object?> get props => [
-        uuid, nomorSurat, perihal, divisiPengirim, divisiTujuan,
-        penerima, tanggalDiterima, fotoPath, fotoHash, lat, lng,
-        alamat, status, kurirId, isSynced, needsUpload,
+        uuid,
+        nomorSurat,
+        perihal,
+        divisiPengirim,
+        divisiTujuan,
+        penerima,
+        tanggalDiterima,
+        createdAt,
+        fotoPath,
+        fotoHash,
+        lat,
+        lng,
+        alamat,
+        status,
+        kurirId,
+        isSynced,
+        needsUpload,
+        pendingTake,
       ];
 }
