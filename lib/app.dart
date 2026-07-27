@@ -25,7 +25,6 @@ class EkspedisiSuratApp extends StatelessWidget {
           primary: _primary,
           secondary: _secondary,
           surface: Colors.white,
-          background: Colors.white,
         ),
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
@@ -44,26 +43,26 @@ class EkspedisiSuratApp extends StatelessWidget {
         cardTheme: CardTheme(
           elevation: 0,
           color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-            side: BorderSide(color: Color(0xFFE0E0E0)),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(const Radius.circular(12)),
+            side: const BorderSide(color: Color(0xFFE0E0E0)),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(const Radius.circular(10)),
           ),
           filled: true,
-          fillColor: Color(0xFFF5F7FA),
+          fillColor: const Color(0xFFF5F7FA),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: _primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(const Radius.circular(10)),
             ),
-            padding: EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
       ),

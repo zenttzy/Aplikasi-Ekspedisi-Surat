@@ -68,6 +68,7 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     }
 
     _penerimaCtrl.clear();
+    if (!mounted) return;
     final String? namaPenerima = await showDialog<String>(
       context: context,
       barrierDismissible: false,
