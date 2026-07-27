@@ -47,14 +47,23 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     );
     if (result == null || !mounted) return;
 
-    final File? foto = result['file'] as File?;
-    final double? lat = result['lat'] as double?;
-    final double? lng = result['lng'] as double?;
+    final String? fotoPath = result['foto_path'] as String?;
+    final double? lat = result['latitude'] as double?;
+    final double? lng = result['longitude'] as double?;
 
-    if (foto == null) {
+    if (fotoPath == null || fotoPath.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto tidak tersedia'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Foto tidak tersedia, coba ambil ulang'), backgroundColor: Colors.red),
       );
+      return;
+    }
+    final File foto = File(fotoPath);
+    if (!await foto.exists()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File foto tidak ditemukan'), backgroundColor: Colors.red),
+        );
+      }
       return;
     }
 
@@ -165,7 +174,7 @@ class _SuratDetailPageState extends State<SuratDetailPage> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      backgroundColor: Colors.white.withOpacity(0.3),
       appBar: AppBar(
         title: Text(_expedition.nomorSurat ?? 'Detail Surat'),
         centerTitle: false,

@@ -141,7 +141,7 @@ class _HomePageState extends State<HomePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      backgroundColor: Colors.white.withOpacity(0.3),
       appBar: AppBar(
         title: const Text('Ekspedisi Surat'),
         backgroundColor: colorScheme.primary,
