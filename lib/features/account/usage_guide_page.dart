@@ -204,20 +204,20 @@ class _StatusGuide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return const Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Arti status surat',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             SizedBox(height: 12),
-            const _StatusRow(color: Color(0xFF1565C0), label: 'Draft', text: 'Menunggu diambil kurir'),
-            const _StatusRow(color: Color(0xFFF59E0B), label: 'Dikirim', text: 'Sedang diantar kurir'),
-            const _StatusRow(color: Color(0xFF16A34A), label: 'Diterima', text: 'Bukti pengiriman sudah tersimpan'),
+            _StatusRow(color: Color(0xFF1565C0), label: 'Draft', text: 'Menunggu diambil kurir'),
+            _StatusRow(color: Color(0xFFF59E0B), label: 'Dikirim', text: 'Sedang diantar kurir'),
+            _StatusRow(color: Color(0xFF16A34A), label: 'Diterima', text: 'Bukti pengiriman sudah tersimpan'),
           ],
         ),
       ),
