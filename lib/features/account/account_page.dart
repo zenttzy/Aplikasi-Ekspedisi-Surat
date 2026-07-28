@@ -7,6 +7,7 @@ class AccountPage extends StatelessWidget {
   final bool isSyncing;
   final int pendingCount;
   final Future<void> Function() onSync;
+  final VoidCallback onOpenGuide;
   final Future<void> Function() onLogout;
 
   const AccountPage({
@@ -17,6 +18,7 @@ class AccountPage extends StatelessWidget {
     required this.isSyncing,
     required this.pendingCount,
     required this.onSync,
+    required this.onOpenGuide,
     required this.onLogout,
   });
 
@@ -94,6 +96,17 @@ class AccountPage extends StatelessWidget {
         Card(
           child: Column(
             children: [
+              ListTile(
+                leading: Icon(
+                  Icons.menu_book_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                title: const Text('Cara Pemakaian'),
+                subtitle: const Text('Panduan langkah penggunaan aplikasi kurir'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onOpenGuide,
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: Icon(
                   isOnline ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,

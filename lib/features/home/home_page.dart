@@ -5,6 +5,7 @@ import '../../core/config/app_constants.dart';
 import '../../core/di/service_locator.dart';
 import '../../core/sync/sync_manager.dart';
 import '../account/account_page.dart';
+import '../account/usage_guide_page.dart';
 import '../activity/activity_page.dart';
 import '../auth/data/auth_repository.dart';
 import '../auth/presentation/login_page.dart';
@@ -73,6 +74,12 @@ class _HomePageState extends State<HomePage> {
 
     await _loadLocalData(initial: true);
     await syncManager.start();
+  }
+
+  void _openUsageGuide() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UsageGuidePage()),
+    );
   }
 
   Future<void> _loadLocalData({bool initial = false}) async {
@@ -234,6 +241,7 @@ class _HomePageState extends State<HomePage> {
         isSyncing: _syncState.isSyncing,
         pendingCount: _syncState.pendingCount,
         onSync: _refresh,
+        onOpenGuide: _openUsageGuide,
         onLogout: _logout,
       ),
     ];
