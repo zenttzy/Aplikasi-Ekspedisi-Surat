@@ -59,7 +59,7 @@ class EkspedisiSuratApp extends StatelessWidget {
           ),
           iconTheme: IconThemeData(color: Colors.white),
         ),
-        cardTheme: const CardThemeData(
+        cardTheme: const CardTheme(
           elevation: 0,
           color: Colors.white,
           surfaceTintColor: Colors.transparent,

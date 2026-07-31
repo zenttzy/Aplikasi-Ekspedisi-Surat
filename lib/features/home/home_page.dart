@@ -255,7 +255,7 @@ class _HomePageState extends State<HomePage> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
+                color: Colors.white.withOpacity(0.16),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.mail_outline, size: 20),
@@ -362,7 +362,7 @@ class _SyncBanner extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      color: color.withValues(alpha: 0.12),
+      color: color.withOpacity(0.12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       child: Row(
         children: [
