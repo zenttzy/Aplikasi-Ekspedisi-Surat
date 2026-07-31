@@ -136,7 +136,7 @@ class DashboardPage extends StatelessWidget {
                           width: 76,
                           height: 76,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.14),
+                            color: Colors.white.withValues(alpha: 0.14),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -275,7 +275,7 @@ class _StatCard extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 19),
