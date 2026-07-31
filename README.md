@@ -5,6 +5,8 @@ Aplikasi Android untuk kurir dalam menerima dan mengantarkan surat ekspedisi. Ap
 ## Fitur Utama
 
 - Login kurir menggunakan akun dari backend perusahaan.
+- Scan QR Tata Usaha untuk pairing satu kurir dengan satu akun TU.
+- Profil menampilkan divisi dan nama Tata Usaha penanggung jawab yang terhubung.
 - Dashboard dengan statistik surat dan tugas prioritas.
 - Navigasi Android-style: **Home, Aktivitas, Riwayat, dan Akun**.
 - Daftar surat baru yang perlu dikirimkan.
@@ -29,11 +31,13 @@ Aplikasi Android untuk kurir dalam menerima dan mengantarkan surat ekspedisi. Ap
 ## Alur Penggunaan Kurir
 
 ```text
-Surat dibuat admin/divisi di website
+Kurir scan QR Tata Usaha dari tab Akun (online)
         ↓
-Surat berstatus Draft
+Akun TU membuat surat di website
         ↓
-Surat masuk ke aplikasi kurir
+Surat berstatus Draft dan hanya ditugaskan ke kurir pasangan TU
+        ↓
+Surat masuk ke aplikasi kurir tersebut
         ↓
 Kurir menerima notifikasi atau melihat badge Aktivitas
         ↓
@@ -61,6 +65,18 @@ Bukti tampil pada website
 | `draft` | Surat baru dibuat dan belum diambil kurir. |
 | `dikirim` | Surat sudah diambil kurir dan sedang diantar. |
 | `diterima` | Surat sudah selesai diantar dan bukti pengiriman tersimpan. |
+
+## Pairing Tata Usaha dan Kurir
+
+Sebelum menerima tugas, kurir harus terhubung dengan akun Tata Usaha:
+
+1. TU login ke website dan membuka menu **Hubungkan Kurir**.
+2. TU menekan **Buat QR koneksi**.
+3. Kurir membuka tab **Akun** di aplikasi lalu menekan **Scan QR Tata Usaha**.
+4. Kurir scan QR sebelum masa berlaku 5 menit berakhir.
+5. Aplikasi menyegarkan profil dan daftar surat setelah pairing berhasil.
+
+Satu kurir hanya dapat terhubung ke satu akun TU aktif. Jika kurir scan QR dari TU lain, hubungan sebelumnya diputus. Surat yang telah menjadi milik kurir sebelumnya tetap tidak berpindah, sedangkan surat baru mengikuti pairing terbaru. Pairing selalu membutuhkan internet; proses pengantaran tetap mendukung mode offline setelah pairing selesai.
 
 ## Mode Offline
 
@@ -109,6 +125,8 @@ URL production untuk GitHub Actions disimpan pada `env/production.json`. Untuk p
 |---|---|---|
 | `POST` | `/api/auth/login` | Login kurir. |
 | `GET` | `/api/auth/me` | Memeriksa sesi akun. |
+| `POST` | `/api/pairing/claim` | Menghubungkan kurir dengan QR Tata Usaha. |
+| `GET` | `/api/pairing/status` | Membaca koneksi TU yang aktif pada profil kurir. |
 | `GET` | `/api/surat` | Mengambil daftar surat. |
 | `PUT` | `/api/surat/:uuid` | Mengambil/menetapkan surat kepada kurir. |
 | `POST` | `/api/surat/:uuid/bukti` | Mengupload bukti pengiriman multipart. |
@@ -141,7 +159,7 @@ lib/
 │   ├── sync/                    Queue offline dan sinkronisasi REST
 │   └── utils/                   Watermark dan hash foto
 └── features/
-    ├── account/                 Akun dan Cara Pemakaian
+    ├── account/                 Akun, scanner QR, dan Cara Pemakaian
     ├── activity/                Daftar aktivitas/tugas
     ├── auth/                    Login dan autentikasi
     ├── dashboard/               Dashboard kurir
@@ -337,6 +355,7 @@ Periksa indikator sinkronisasi pada aplikasi. Jika masih pending, pastikan konek
 - [x] Dashboard kurir.
 - [x] Tab Home, Aktivitas, Riwayat, dan Akun.
 - [x] Badge tugas baru.
+- [x] Pairing QR Tata Usaha–kurir.
 - [x] Ambil tugas surat.
 - [x] Input nama penerima.
 - [x] Kamera dan watermark foto.
@@ -346,7 +365,7 @@ Periksa indikator sinkronisasi pada aplikasi. Jika masih pending, pastikan konek
 - [x] Queue klaim surat dan upload bukti.
 - [x] Auto-sync saat internet kembali.
 - [x] Firebase push notification.
-- [x] Halaman Cara Pemakaian.
+- [x] Halaman Cara Pemakaian termasuk pairing QR.
 - [x] GitHub Actions build APK dan AAB.
 - [ ] Auto-update aplikasi dengan download dan instalasi dari dalam aplikasi.
 - [ ] Unit test Flutter lengkap.

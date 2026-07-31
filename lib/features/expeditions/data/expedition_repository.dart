@@ -99,6 +99,22 @@ class ExpeditionRepository {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+
+      final serverUuids = serverItems.map((item) => item.uuid).toSet();
+      final localRows = await transaction.query(AppConstants.tableExpeditions);
+      for (final row in localRows) {
+        final local = Expedition.fromSqlite(row);
+        final canRemove = !serverUuids.contains(local.uuid) &&
+            !local.pendingTake &&
+            !local.needsUpload;
+        if (canRemove) {
+          await transaction.delete(
+            AppConstants.tableExpeditions,
+            where: 'uuid = ?',
+            whereArgs: [local.uuid],
+          );
+        }
+      }
     });
   }
 

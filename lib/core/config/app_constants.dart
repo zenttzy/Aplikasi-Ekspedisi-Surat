@@ -11,6 +11,7 @@ class AppConstants {
   static const String epMe = '/auth/me';
   static const String epSurat = '/surat';
   static const String epUploadBukti = '/surat';
+  static const String epPairingClaim = '/pairing/claim';
 
   // Secure storage keys
   static const String keyAccessToken = 'access_token';

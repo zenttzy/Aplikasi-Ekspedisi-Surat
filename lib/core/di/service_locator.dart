@@ -6,6 +6,7 @@ import '../network/dio_client.dart';
 import '../network/secure_storage_service.dart';
 import '../sync/sync_manager.dart';
 import '../sync/sync_prefs.dart';
+import '../../features/account/data/courier_pairing_repository.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/expeditions/data/api_surat_repository.dart';
 import '../../features/expeditions/data/expedition_repository.dart';
@@ -19,6 +20,9 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<SyncPrefs>(() => SyncPrefs());
   sl.registerLazySingleton<DioClient>(() => DioClient(sl()));
   sl.registerLazySingleton<AuthRepository>(() => AuthRepository(sl()));
+  sl.registerLazySingleton<CourierPairingRepository>(
+    () => CourierPairingRepository(sl()),
+  );
   sl.registerLazySingleton<ExpeditionRepository>(
     () => ExpeditionRepository(sl()),
   );

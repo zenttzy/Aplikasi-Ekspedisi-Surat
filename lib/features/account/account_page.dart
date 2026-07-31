@@ -7,6 +7,7 @@ class AccountPage extends StatelessWidget {
   final bool isSyncing;
   final int pendingCount;
   final Future<void> Function() onSync;
+  final VoidCallback onScanPairing;
   final VoidCallback onOpenGuide;
   final Future<void> Function() onLogout;
 
@@ -23,6 +24,7 @@ class AccountPage extends StatelessWidget {
     required this.isSyncing,
     required this.pendingCount,
     required this.onSync,
+    required this.onScanPairing,
     required this.onOpenGuide,
     required this.onLogout,
   });
@@ -110,6 +112,30 @@ class AccountPage extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Koneksi penugasan',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
+            leading: Icon(
+              Icons.qr_code_scanner,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Scan QR Tata Usaha'),
+            subtitle: Text(
+              hasAssignedTu
+                  ? 'Saat ini terhubung dengan ${assignedTuNama!.trim()}'
+                  : 'Hubungkan akun dengan penanggung jawab TU',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onScanPairing,
           ),
         ),
         const SizedBox(height: 20),

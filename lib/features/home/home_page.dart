@@ -5,6 +5,8 @@ import '../../core/config/app_constants.dart';
 import '../../core/di/service_locator.dart';
 import '../../core/sync/sync_manager.dart';
 import '../account/account_page.dart';
+import '../account/courier_pairing_scanner_page.dart';
+import '../account/data/courier_pairing_repository.dart';
 import '../account/usage_guide_page.dart';
 import '../activity/activity_page.dart';
 import '../auth/data/auth_repository.dart';
@@ -69,18 +71,7 @@ class _HomePageState extends State<HomePage> {
       });
     });
 
-    final user = await sl<AuthRepository>().getCurrentUser();
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
-          _courierEmail = user?['email'] as String? ?? '';
-          _divisiNama = user?['divisi_nama'] as String?;
-          _assignedTuNama = user?['assigned_tu_nama'] as String?;
-        });
-      });
-    }
+    await _refreshProfile(deferSetState: true);
 
     await _loadLocalData(initial: true);
     await syncManager.start();
@@ -89,6 +80,49 @@ class _HomePageState extends State<HomePage> {
   void _openUsageGuide() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const UsageGuidePage()),
+    );
+  }
+
+  Future<void> _refreshProfile({bool deferSetState = false}) async {
+    final user = await sl<AuthRepository>().getCurrentUser();
+    if (!mounted) return;
+
+    void updateProfile() {
+      if (!mounted) return;
+      setState(() {
+        _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
+        _courierEmail = user?['email'] as String? ?? '';
+        _divisiNama = user?['divisi_nama'] as String?;
+        _assignedTuNama = user?['assigned_tu_nama'] as String?;
+      });
+    }
+
+    if (deferSetState) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => updateProfile());
+    } else {
+      updateProfile();
+    }
+  }
+
+  Future<void> _openCourierPairing() async {
+    final result = await Navigator.of(context).push<CourierPairingResult>(
+      MaterialPageRoute(
+        builder: (_) => const CourierPairingScannerPage(),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    await _refreshProfile();
+    await sl<SyncManager>().syncAll();
+    await _loadLocalData();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Terhubung dengan ${result.tuName} • ${result.divisionName}',
+        ),
+      ),
     );
   }
 
@@ -256,6 +290,7 @@ class _HomePageState extends State<HomePage> {
         isSyncing: _syncState.isSyncing,
         pendingCount: _syncState.pendingCount,
         onSync: _refresh,
+        onScanPairing: _openCourierPairing,
         onOpenGuide: _openUsageGuide,
         onLogout: _logout,
       ),

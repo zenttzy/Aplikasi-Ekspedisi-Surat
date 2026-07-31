@@ -55,5 +55,5 @@ Setelah workflow berhasil:
 1. Pastikan `env/production.json` menunjuk ke backend yang aktif.
 2. Pastikan `google-services.json` memakai package name aplikasi yang benar.
 3. Jalankan `flutter analyze` dan `flutter test` melalui GitHub Actions.
-4. Uji login kurir, daftar surat, klaim surat, foto GPS, nama penerima, mode offline, dan sinkronisasi.
+4. Uji login kurir, Scan QR Tata Usaha, refresh profil/divisi, daftar surat, klaim surat, foto GPS, nama penerima, mode offline, dan sinkronisasi.
 5. Download APK artifact dan install manual pada perangkat uji.
