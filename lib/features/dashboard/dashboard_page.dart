@@ -280,7 +280,7 @@ class _StatCard extends StatelessWidget {
             ),
             child: Icon(icon, color: color, size: 19),
           ),
-          const Spacer(),
+          const SizedBox(height: 12),
           Text(
             '$value',
             style: TextStyle(
