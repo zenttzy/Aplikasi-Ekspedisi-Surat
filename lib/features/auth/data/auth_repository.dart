@@ -34,7 +34,11 @@ class AuthRepository {
       );
       final data = res.data as Map<String, dynamic>;
       final token = data['token'] as String?;
-      if (token == null) return const AuthResult.fail('Token tidak ditemukan');
+      if (token == null) {
+        return const AuthResult.fail(
+          'Login belum dapat diproses. Silakan coba lagi beberapa saat.',
+        );
+      }
       await _storage.saveTokens(accessToken: token, refreshToken: '');
       final user = data['user'] as Map<String, dynamic>?;
       if (user != null) {
@@ -44,10 +48,7 @@ class AuthRepository {
       _registerFcmToken(token);
       return const AuthResult.ok();
     } on DioException catch (e) {
-      final msg = e.response?.data is Map
-          ? (e.response?.data['error'] ?? e.message)
-          : e.message;
-      return AuthResult.fail(msg?.toString() ?? 'Gagal login');
+      return AuthResult.fail(_loginErrorMessage(e));
     }
   }
 
@@ -121,5 +122,29 @@ class AuthRepository {
         options: Options(headers: {'Authorization': 'Bearer $authToken'}),
       );
     } catch (_) {}
+  }
+
+  String _loginErrorMessage(DioException exception) {
+    final statusCode = exception.response?.statusCode;
+    final serverMessage = exception.response?.data is Map
+        ? exception.response?.data['error']?.toString().toLowerCase()
+        : null;
+
+    if (statusCode == 401 || serverMessage?.contains('invalid credential') == true) {
+      return 'Email atau kata sandi tidak sesuai. Periksa kembali lalu coba lagi.';
+    }
+    if (statusCode == 403) {
+      return 'Akun Anda belum dapat digunakan. Hubungi admin untuk memastikan akun sudah disetujui.';
+    }
+    if (statusCode != null && statusCode >= 500) {
+      return 'Layanan sedang mengalami kendala. Silakan coba lagi beberapa saat.';
+    }
+    if (exception.type == DioExceptionType.connectionTimeout ||
+        exception.type == DioExceptionType.sendTimeout ||
+        exception.type == DioExceptionType.receiveTimeout ||
+        exception.type == DioExceptionType.connectionError) {
+      return 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.';
+    }
+    return 'Login belum berhasil. Silakan periksa koneksi Anda dan coba lagi.';
   }
 }

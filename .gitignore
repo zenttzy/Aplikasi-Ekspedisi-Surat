@@ -42,6 +42,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Source asset drop folder; the optimized tracked asset lives in assets/images.
+/Assets/
+
 # Environment / secrets (dart-define-from-file) — JANGAN commit key
 /env/*.json
 !/env/example.json

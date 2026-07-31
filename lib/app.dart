@@ -38,7 +38,7 @@ class EkspedisiSuratApp extends StatelessWidget {
     );
 
     return MaterialApp(
-      title: 'Ekspedisi Surat PT Timah',
+      title: 'Ekspedisi Surat',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: colorScheme,

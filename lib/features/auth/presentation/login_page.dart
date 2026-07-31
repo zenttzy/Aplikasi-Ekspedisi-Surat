@@ -45,8 +45,11 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         setState(() => _errorMessage = result.error ?? 'Gagal login');
       }
-    } catch (e) {
-      setState(() => _errorMessage = e.toString());
+    } catch (_) {
+      setState(() {
+        _errorMessage =
+            'Login belum berhasil. Periksa koneksi Anda dan coba lagi.';
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -66,9 +69,19 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.local_shipping_rounded,
-                      size: 64, color: theme.colorScheme.primary)
-                      .animate().fadeIn(duration: 400.ms).scale(),
+                  Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Icon(
+                      Icons.local_shipping_rounded,
+                      size: 42,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ).animate().fadeIn(duration: 400.ms).scale(),
                   const SizedBox(height: 16),
                   Text('Ekspedisi Surat',
                       textAlign: TextAlign.center,
@@ -76,7 +89,7 @@ class _LoginPageState extends State<LoginPage> {
                           ?.copyWith(fontWeight: FontWeight.bold))
                       .animate().fadeIn(delay: 200.ms),
                   const SizedBox(height: 8),
-                  Text('Masuk sebagai kurir',
+                  Text('Masuk sebagai kurir untuk mengelola tugas pengiriman.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium
                           ?.copyWith(color: theme.colorScheme.onSurfaceVariant))
@@ -85,17 +98,57 @@ class _LoginPageState extends State<LoginPage> {
                   if (_errorMessage != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.errorContainer,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(_errorMessage!,
-                          style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tidak dapat masuk',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onErrorContainer,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _errorMessage!,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Tutup pesan',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() => _errorMessage = null),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       prefixIcon: Icon(Icons.email_outlined),
@@ -108,8 +161,11 @@ class _LoginPageState extends State<LoginPage> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) => _isLoading ? null : _handleLogin(),
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: 'Kata sandi',
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
@@ -121,7 +177,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     validator: (val) =>
-                        (val == null || val.isEmpty) ? 'Password wajib diisi' : null,
+                        (val == null || val.isEmpty) ? 'Kata sandi wajib diisi' : null,
                   ),
                   const SizedBox(height: 24),
                   FilledButton(

@@ -63,6 +63,7 @@ dependencies:
   # Image manipulation & animation
   image: ^4.2.0
   flutter_animate: ^4.5.0
+  lottie: 3.1.2
 
   # Permissions & misc
   permission_handler: ^11.3.1
@@ -102,6 +103,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/app_icon.webp
 
   # To add assets to your application, add an assets section, like this:
   # assets:
