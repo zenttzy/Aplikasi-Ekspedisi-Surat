@@ -29,6 +29,8 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   String _courierName = 'Kurir';
   String _courierEmail = '';
+  String? _divisiNama;
+  String? _assignedTuNama;
   int _selectedIndex = 0;
   int _newTaskCount = 0;
   Set<String> _knownUuids = {};
@@ -74,6 +76,8 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
           _courierEmail = user?['email'] as String? ?? '';
+          _divisiNama = user?['divisi_nama'] as String?;
+          _assignedTuNama = user?['assigned_tu_nama'] as String?;
         });
       });
     }
@@ -246,6 +250,8 @@ class _HomePageState extends State<HomePage> {
       AccountPage(
         name: _courierName,
         email: _courierEmail,
+        divisiNama: _divisiNama,
+        assignedTuNama: _assignedTuNama,
         isOnline: _syncState.isOnline,
         isSyncing: _syncState.isSyncing,
         pendingCount: _syncState.pendingCount,

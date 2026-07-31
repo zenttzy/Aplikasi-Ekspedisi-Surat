@@ -10,10 +10,15 @@ class AccountPage extends StatelessWidget {
   final VoidCallback onOpenGuide;
   final Future<void> Function() onLogout;
 
+  final String? divisiNama;
+  final String? assignedTuNama;
+
   const AccountPage({
     super.key,
     required this.name,
     required this.email,
+    this.divisiNama,
+    this.assignedTuNama,
     required this.isOnline,
     required this.isSyncing,
     required this.pendingCount,
@@ -72,6 +77,26 @@ class AccountPage extends StatelessWidget {
                           color: theme.colorScheme.outline,
                         ),
                       ),
+                      if (divisiNama != null && divisiNama!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Divisi: $divisiNama',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                      if (assignedTuNama != null && assignedTuNama!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Penanggung Jawab: $assignedTuNama',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       const Chip(
                         avatar: Icon(Icons.verified_user_outlined, size: 17),
