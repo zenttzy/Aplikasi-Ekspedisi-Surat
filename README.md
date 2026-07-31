@@ -2,6 +2,10 @@
 
 Aplikasi Android untuk kurir dalam menerima dan mengantarkan surat ekspedisi. Aplikasi terhubung ke REST API milik perusahaan dan dirancang **offline-first**, sehingga kurir tetap dapat mengambil surat, mengisi nama penerima, mengambil foto bukti, serta merekam lokasi ketika berada di area tanpa internet.
 
+## Kompatibilitas Android
+
+Aplikasi membutuhkan Android 6.0 / API 23 atau lebih baru karena fitur scanner QR menggunakan CameraX. Build Android dikompilasi menggunakan SDK 36.
+
 ## Fitur Utama
 
 - Login kurir menggunakan akun dari backend perusahaan.
