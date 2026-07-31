@@ -55,20 +55,26 @@ class _HomePageState extends State<HomePage> {
     final syncManager = sl<SyncManager>();
     _syncSubscription = syncManager.states.listen((state) async {
       if (!mounted) return;
-      setState(() => _syncState = state);
-      await _loadLocalData();
-      if (state.error != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(state.error!)),
-        );
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        setState(() => _syncState = state);
+        await _loadLocalData();
+        if (state.error != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.error!)),
+          );
+        }
+      });
     });
 
     final user = await sl<AuthRepository>().getCurrentUser();
     if (mounted) {
-      setState(() {
-        _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
-        _courierEmail = user?['email'] as String? ?? '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _courierName = user?['nama_lengkap'] as String? ?? 'Kurir';
+          _courierEmail = user?['email'] as String? ?? '';
+        });
       });
     }
 
@@ -84,9 +90,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadLocalData({bool initial = false}) async {
     if (initial && mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _loading = true;
+          _error = null;
+        });
       });
     }
 
