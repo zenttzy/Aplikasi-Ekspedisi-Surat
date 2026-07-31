@@ -101,7 +101,7 @@ URL default:
 http://43.134.228.34:3001/api
 ```
 
-URL dapat diganti saat build menggunakan `--dart-define`.
+URL production untuk GitHub Actions disimpan pada `env/production.json`. Untuk pindah ke server PT, ubah nilai `API_BASE_URL` pada file tersebut, lalu jalankan workflow build ulang. Untuk menjalankan lokal dengan konfigurasi yang sama, gunakan `--dart-define-from-file=env/production.json`.
 
 ### Endpoint yang digunakan
 
@@ -152,7 +152,7 @@ lib/
 
 ## Persyaratan Development
 
-- Flutter `3.24.x` / Dart `3.5.4`.
+- Flutter stable `3.29.x` / Dart `3.5.4`.
 - Java `17` untuk Android build.
 - Android SDK sesuai konfigurasi Flutter.
 - Perangkat Android atau emulator.
@@ -180,10 +180,10 @@ File tersebut berisi konfigurasi aplikasi Firebase Android. **Jangan pernah mena
 
 ## Menjalankan Aplikasi
 
-Gunakan URL API default:
+Gunakan URL API production dari file konfigurasi:
 
 ```bash
-flutter run
+flutter run --dart-define-from-file=env/production.json
 ```
 
 Atau gunakan URL backend lain:
@@ -215,7 +215,7 @@ flutter analyze
 flutter test
 ```
 
-Saat ini repository belum memiliki folder `test/`. Jika `flutter test` menampilkan `Test directory "test" not found`, workflow test perlu menunggu penambahan unit test atau folder test dasar.
+Repository memiliki folder `test/` dengan widget smoke test. Tambahkan test baru di folder tersebut ketika fitur aplikasi bertambah.
 
 ## GitHub Actions
 
@@ -224,6 +224,8 @@ Workflow tersedia di:
 ```text
 .github/workflows/build-android.yml
 ```
+
+Workflow mengambil endpoint dari `env/production.json`, sehingga endpoint tidak perlu diubah pada dua perintah build yang berbeda.
 
 Workflow berjalan ketika:
 
@@ -235,7 +237,7 @@ Tahapan workflow:
 
 1. Checkout repository.
 2. Menyiapkan Java 17.
-3. Menyiapkan Flutter stable `3.24.x`.
+3. Menyiapkan Flutter stable `3.29.x`.
 4. Menjalankan `flutter pub get`.
 5. Menjalankan `flutter analyze`.
 6. Menjalankan `flutter test`.

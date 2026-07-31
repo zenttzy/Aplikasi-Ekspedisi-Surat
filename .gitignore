@@ -45,4 +45,4 @@ app.*.map.json
 # Environment / secrets (dart-define-from-file) — JANGAN commit key
 /env/*.json
 !/env/example.json
-
+!/env/production.json

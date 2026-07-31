@@ -31,6 +31,8 @@ class AccountPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final initial = name.trim().isEmpty ? 'K' : name.trim()[0].toUpperCase();
+    final hasDivision = divisiNama?.trim().isNotEmpty == true;
+    final hasAssignedTu = assignedTuNama?.trim().isNotEmpty == true;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -77,26 +79,26 @@ class AccountPage extends StatelessWidget {
                           color: theme.colorScheme.outline,
                         ),
                       ),
-                      if (divisiNama != null && divisiNama!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Divisi: $divisiNama',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: theme.colorScheme.primary,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Divisi: ${hasDivision ? divisiNama!.trim() : 'Belum ditugaskan'}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: hasDivision
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
                         ),
-                      ],
-                      if (assignedTuNama != null && assignedTuNama!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Penanggung Jawab: $assignedTuNama',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF16A34A),
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Penanggung Jawab: ${hasAssignedTu ? assignedTuNama!.trim() : 'Belum ditugaskan'}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: hasAssignedTu
+                              ? const Color(0xFF16A34A)
+                              : theme.colorScheme.outline,
                         ),
-                      ],
+                      ),
                       const SizedBox(height: 8),
                       const Chip(
                         avatar: Icon(Icons.verified_user_outlined, size: 17),

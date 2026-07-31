@@ -72,7 +72,25 @@ class AuthRepository {
 
   Future<String?> getAccessToken() => _storage.accessToken;
 
-  Future<Map<String, dynamic>?> getCurrentUser() => _storage.getUserData();
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    final cached = await _storage.getUserData();
+    try {
+      final token = await _storage.accessToken;
+      if (token != null) {
+        final res = await _dio.get(
+          AppConstants.epMe,
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+        final data = res.data as Map<String, dynamic>;
+        final user = data['user'] as Map<String, dynamic>?;
+        if (user != null) {
+          await _storage.saveUserData(user);
+          return user;
+        }
+      }
+    } catch (_) {}
+    return cached;
+  }
 
   Future<String?> checkAccountStatus(String token) async {
     try {
