@@ -39,7 +39,7 @@ jobs:
       run: flutter test
     
     - name: Build APK
-      run: flutter build apk --release
+      run: flutter build apk --release --dart-define=API_BASE_URL=http://10.2.9.230:3001/api
     
     - name: Build App Bundle
       run: flutter build appbundle --release
